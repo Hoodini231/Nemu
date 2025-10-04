@@ -15,7 +15,7 @@ import { ArrowLeft, Upload, X, Sparkles } from "lucide-react"
 
 export default function CreatePage() {
   const router = useRouter()
-  const [prompt, setPrompt] = useState("")
+  const [prompt, setPrompt] = useState("woof")
   const [panels, setPanels] = useState("4")
   const [style, setStyle] = useState("shonen")
   const [uploadedImages, setUploadedImages] = useState<string[]>([])
@@ -40,7 +40,7 @@ export default function CreatePage() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="border-b-2 border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
+      <header className="border-b-2 border-border bg-header/75 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Link
             href="/"
@@ -50,10 +50,10 @@ export default function CreatePage() {
             <span>Back</span>
           </Link>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-primary-foreground" />
+            <div className="w-8 h-8 bg-gradient-to-br from-[#C9E4DE] to-[#C6DEF1] rounded-full flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-foreground" />
             </div>
-            <h1 className="text-xl font-bold text-foreground">MangaBoard</h1>
+            <h1 className="text-xl font-bold text-foreground">Nemu</h1>
           </div>
         </div>
       </header>
@@ -62,12 +62,11 @@ export default function CreatePage() {
         <div className="grid lg:grid-cols-[1fr,400px] gap-8 max-w-7xl mx-auto">
           {/* Left Column - Main Creation Area */}
           <div className="space-y-6">
-            {/* Washi tape header */}
             <div className="inline-block">
-              <div className="washi-tape text-sm font-medium text-foreground">✏️ New Storyboard</div>
+              <div className="washi-tape washi-tape-peach text-sm font-medium text-foreground">✏️ New Storyboard</div>
             </div>
 
-            <Card className="sketch-border bg-card">
+            <Card className="card-tinted-blue">
               <CardHeader>
                 <CardTitle className="text-2xl text-foreground">Create Your Storyboard</CardTitle>
               </CardHeader>
@@ -79,10 +78,11 @@ export default function CreatePage() {
                   </Label>
                   <Textarea
                     id="prompt"
+                    name="prompt"
                     placeholder="e.g., A young samurai facing a mythical oni under a full moon in a bamboo forest..."
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
-                    className="min-h-[200px] resize-none bg-input border-2 border-border focus:border-primary text-foreground placeholder:text-muted-foreground"
+                    className="min-h-[200px] resize-none bg-input border-2 border-border focus:border-primary text-foreground placeholder:text-muted-foreground focus:outline-none"
                   />
                   <p className="text-sm text-muted-foreground">
                     Describe your scene, characters, actions, and mood in detail.
@@ -97,6 +97,7 @@ export default function CreatePage() {
                     </Label>
                     <Input
                       id="panels"
+                      name="panels"
                       type="number"
                       min="1"
                       max="12"
@@ -129,17 +130,11 @@ export default function CreatePage() {
 
           {/* Right Column - Reference Area */}
           <div className="space-y-6">
-            {/* Washi tape header */}
             <div className="inline-block">
-              <div
-                className="washi-tape text-sm font-medium text-foreground"
-                style={{ background: "var(--washi-mint)" }}
-              >
-                📎 References
-              </div>
+              <div className="washi-tape washi-tape-mint text-sm font-medium text-foreground">📎 References</div>
             </div>
 
-            <Card className="sketch-border bg-card">
+            <Card className="card-tinted-mint">
               <CardHeader>
                 <CardTitle className="text-xl text-foreground">Add Illustration History</CardTitle>
               </CardHeader>

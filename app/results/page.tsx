@@ -1,10 +1,10 @@
+"use client"
 import Link from "next/link"
 import { Button } from "../../components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../components/ui/card"
 import { ArrowLeft, RefreshCw, Edit, Sparkles } from "lucide-react"
 
 export default function ResultsPage() {
-  // Mock data for generated panels
   const panels = [
     {
       id: 1,
@@ -12,6 +12,7 @@ export default function ResultsPage() {
       description:
         "Wide establishing shot of a moonlit bamboo forest. Shadows dance between the tall stalks as mist rolls across the ground. The full moon hangs heavy in the sky.",
       image: "/moonlit-bamboo-forest-manga-style.jpg",
+      colorTheme: "blue",
     },
     {
       id: 2,
@@ -19,6 +20,7 @@ export default function ResultsPage() {
       description:
         "Close-up of the young samurai's determined face. Sweat beads on his forehead, his hand grips the katana handle. His eyes reflect the moonlight with fierce resolve.",
       image: "/young-samurai-close-up-manga-style.jpg",
+      colorTheme: "peach",
     },
     {
       id: 3,
@@ -26,6 +28,7 @@ export default function ResultsPage() {
       description:
         "The mythical oni emerges from the shadows, towering and menacing. Its red skin glows in the moonlight, horns piercing the sky. Steam rises from its nostrils.",
       image: "/mythical-oni-demon-manga-style.jpg",
+      colorTheme: "pink",
     },
     {
       id: 4,
@@ -33,13 +36,38 @@ export default function ResultsPage() {
       description:
         "Dynamic action shot as the samurai leaps forward, katana raised high. Motion lines emphasize the speed and power of the attack. Bamboo leaves scatter in the wind.",
       image: "/samurai-action-leap-manga-style.jpg",
+      colorTheme: "lavender",
     },
   ]
+
+  const getCardClass = (theme: string) => {
+    const themeMap: Record<string, string> = {
+      blue: "card-tinted-blue",
+      peach: "card-tinted-peach",
+      pink: "card-tinted-pink",
+      lavender: "card-tinted-lavender",
+      mint: "card-tinted-mint",
+      yellow: "card-tinted-yellow",
+    }
+    return themeMap[theme] || ""
+  }
+
+  const getWashiColor = (theme: string) => {
+    const colorMap: Record<string, string> = {
+      blue: "#C6DEF1",
+      peach: "#F7D9C4",
+      pink: "#F2C6DE",
+      lavender: "#DBCDF0",
+      mint: "#C9E4DE",
+      yellow: "#FAEDCB",
+    }
+    return colorMap[theme] || "#C9E4DE"
+  }
 
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="border-b-2 border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
+      <header className="border-b-2 border-border bg-header/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Link
             href="/create"
@@ -49,10 +77,10 @@ export default function ResultsPage() {
             <span>Back to Create</span>
           </Link>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-primary-foreground" />
+            <div className="w-8 h-8 bg-gradient-to-br from-[#C9E4DE] to-[#C6DEF1] rounded-full flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-foreground" />
             </div>
-            <h1 className="text-xl font-bold text-foreground">MangaBoard</h1>
+            <h1 className="text-xl font-bold text-foreground">Nemu</h1>
           </div>
         </div>
       </header>
@@ -61,12 +89,7 @@ export default function ResultsPage() {
         {/* Header Section */}
         <div className="max-w-6xl mx-auto mb-8 space-y-4">
           <div className="inline-block">
-            <div
-              className="washi-tape text-sm font-medium text-foreground"
-              style={{ background: "var(--washi-lavender)" }}
-            >
-              ✨ Generated
-            </div>
+            <div className="washi-tape washi-tape-lavender text-sm font-medium text-foreground">✨ Generated</div>
           </div>
           <h1 className="text-3xl md:text-4xl font-bold text-foreground">Your Storyboard Creation</h1>
           <p className="text-muted-foreground">
@@ -75,39 +98,42 @@ export default function ResultsPage() {
         </div>
 
         {/* Panels Grid */}
-        <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-6">
+        <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-6">
           {panels.map((panel, index) => (
             <Card
               key={panel.id}
-              className="sketch-border bg-card hover:shadow-lg transition-all duration-300"
+              className={`sketch-border ${getCardClass(panel.colorTheme)} hover:shadow-lg transition-all duration-300 h-100`}
               style={{
                 transform: index % 2 === 0 ? "rotate(-0.5deg)" : "rotate(0.5deg)",
               }}
             >
               <CardHeader>
-                <CardTitle className="text-xl text-foreground flex items-center gap-2">
-                  <span className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">
+                <CardTitle className="text-sm text-foreground flex items-center gap-2">
+                  <span
+                    className="w-6 h-6 rounded-full text-foreground flex items-center justify-center text-xs font-bold shadow-md"
+                    style={{ background: getWashiColor(panel.colorTheme) }}
+                  >
                     {panel.id}
                   </span>
                   {panel.title}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="relative overflow-hidden rounded-lg border-2 border-border">
-                  <img src={panel.image || "/placeholder.svg"} alt={panel.title} className="w-full h-64 object-cover" />
+              <CardContent className="space-y-2">
+                <div className="relative overflow-hidden rounded-lg border-2 border-border h-40">
+                  <img src={panel.image || "/placeholder.svg"} alt={panel.title} className="w-full h-full object-cover" />
                 </div>
-                <p className="text-sm text-muted-foreground leading-relaxed text-pretty">{panel.description}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed text-pretty">{panel.description}</p>
               </CardContent>
               <CardFooter className="flex gap-3">
                 <Button
                   variant="outline"
-                  className="flex-1 border-2 border-border hover:bg-muted text-foreground bg-transparent"
+                  className="flex-none border-2 border-border hover:bg-muted text-foreground text-xs px-2 py-1"
                 >
-                  <RefreshCw className="w-4 h-4 mr-2" />
+                  <RefreshCw className="w-3 h-3 mr-1" />
                   Regenerate me
                 </Button>
-                <Button className="flex-1 bg-sakura hover:bg-sakura/90 text-sakura-foreground">
-                  <Edit className="w-4 h-4 mr-2" />
+                <Button className="flex-none bg-[#f8f8f8] hover:bg-sakura/90 text-sakura-foreground text-xs px-2 py-1">
+                  <Edit className="w-3 h-3 mr-1" />
                   Make me editable
                 </Button>
               </CardFooter>
@@ -124,11 +150,6 @@ export default function ResultsPage() {
           >
             Export Storyboard
           </Button>
-          <Link href="/create" className="flex-1">
-            <Button size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-              Create New Storyboard
-            </Button>
-          </Link>
         </div>
       </div>
     </div>

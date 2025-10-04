@@ -4,21 +4,25 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Paper texture background */
+  /* Paper texture background - soft cream */
+  --background: #ffffff;
+  --foreground: oklch(0.145 0 0);
 
-  /* Card backgrounds - slightly lighter paper */
-  --card: oklch(1 0 0);
+  /* Card backgrounds - white for contrast */
+  --card: #f8f8f8;
   --card-foreground: oklch(0.145 0 0);
+
+  --header: #caf0f8;
 
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
 
-  /* Muted teal primary accent */
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
+  /* Primary accent - pastel mint green */
+  --primary: #c9e4de;
+  --primary-foreground: oklch(0.145 0 0);
 
-  /* Sakura pink for CTA buttons */
-  --sakura: #ffb7c5;
+  /* Sakura/CTA button - pastel blue */
+  --sakura: #c6def1;
   --sakura-foreground: oklch(0.145 0 0);
 
   /* Soft earthy secondary */
@@ -29,11 +33,13 @@
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
 
-  /* Washi tape accent colors */
-  --washi-yellow: #f4d58d;
-  --washi-mint: #b8d8ba;
-  --washi-peach: #f5c6a5;
-  --washi-lavender: #d4c5e2;
+  /* Washi tape colors - using the pastel rainbow palette */
+  --washi-yellow: #BFCBCE;
+  --washi-mint: #c9e4de;
+  --washi-blue: #c6def1;
+  --washi-lavender: #dbcdf0;
+  --washi-pink: #f2c6de;
+  --washi-peach: #f7d9c4;
 
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
@@ -41,8 +47,8 @@
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.577 0.245 27.325);
 
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  --border: #e8e5df;
+  --input: #ffffff;
   --ring: oklch(0.708 0 0);
 
   --radius: 0.625rem;
@@ -61,18 +67,16 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
 }
 
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
+  --card: oklch(0.145 0 0);
   --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
+  --popover: oklch(0.145 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
+  --primary: oklch(0.985 0 0);
   --primary-foreground: oklch(0.205 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
@@ -80,11 +84,11 @@
   --muted-foreground: oklch(0.708 0 0);
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
+  --destructive: oklch(0.396 0.141 25.723);
   --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.439 0 0);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -96,8 +100,8 @@
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.439 0 0);
 }
 
 @theme inline {
@@ -105,6 +109,7 @@
   --font-mono: var(--font-geist-mono);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-header: var(--header);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
@@ -191,6 +196,31 @@
   );
 }
 
+/* Colorful washi tape variants */
+.washi-tape-yellow {
+  background: var(--washi-yellow);
+}
+
+.washi-tape-mint {
+  background: var(--washi-mint);
+}
+
+.washi-tape-blue {
+  background: var(--washi-blue);
+}
+
+.washi-tape-lavender {
+  background: var(--washi-lavender);
+}
+
+.washi-tape-pink {
+  background: var(--washi-pink);
+}
+
+.washi-tape-peach {
+  background: var(--washi-peach);
+}
+
 /* Hand-drawn style borders */
 .sketch-border {
   border: 2px solid var(--border);
@@ -208,4 +238,29 @@
   border: 1px solid var(--border);
   border-radius: 4px;
   opacity: 0.3;
+}
+
+/* Updated colorful card backgrounds to pastel rainbow tints */
+.card-tinted-mint {
+  background: linear-gradient(135deg, #ffffff 0%, #c5eee5 100%);
+}
+
+.card-tinted-blue {
+  background: linear-gradient(135deg, #ffffff 0%, #abd4f6 100%);
+}
+
+.card-tinted-lavender {
+  background: linear-gradient(135deg, #ffffff 0%, #ccb6f3 100%);
+}
+
+.card-tinted-pink {
+  background: linear-gradient(135deg, #ffffff 0%, #f6a5ca 100%);
+}
+
+.card-tinted-peach {
+  background: linear-gradient(135deg, #ffffff 0%, #f7bc9f 100%);
+}
+
+.card-tinted-yellow {
+  background: linear-gradient(135deg, #ffffff 0%, #ffe4a5 100%);
 }
