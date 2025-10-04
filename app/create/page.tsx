@@ -19,12 +19,19 @@ export default function CreatePage() {
   const [panels, setPanels] = useState("4")
   const [style, setStyle] = useState("shonen")
   const [uploadedImages, setUploadedImages] = useState<string[]>([])
+  const [errors, setErrors] = useState({
+    prompt: "",
+    panels: "",
+    images: "",
+  })
+  const [isLoading, setIsLoading] = useState(false)
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (files) {
       const newImages = Array.from(files).map((file) => URL.createObjectURL(file))
       setUploadedImages((prev) => [...prev, ...newImages])
+      setErrors((prev) => ({ ...prev, images: "" }))
     }
   }
 
@@ -32,9 +39,74 @@ export default function CreatePage() {
     setUploadedImages((prev) => prev.filter((_, i) => i !== index))
   }
 
-  const handleCreate = () => {
-    // Navigate to results page
-    router.push("/results")
+  const handleCreate = async () => {
+    // Validate form
+    const newErrors = {
+      prompt: "",
+      panels: "",
+      images: "",
+    }
+
+    if (!prompt.trim()) {
+      newErrors.prompt = "Story prompt is required"
+    }
+
+    if (!panels || Number(panels) < 1 || Number(panels) > 12) {
+      newErrors.panels = "Please enter a valid number of panels (1-12)"
+    }
+
+    if (uploadedImages.length === 0) {
+      newErrors.images = "Please upload at least one reference image"
+    }
+
+    setErrors(newErrors)
+
+    // Check if there are any errors
+    if (newErrors.prompt || newErrors.panels || newErrors.images) {
+      return
+    }
+
+    setIsLoading(true)
+
+    try {
+      // Convert uploaded images to File objects
+      const imageFiles = await Promise.all(
+        uploadedImages.map(async (imageUrl, index) => {
+          const response = await fetch(imageUrl)
+          const blob = await response.blob()
+          return new File([blob], `image-${index}.png`, { type: blob.type })
+        })
+      )
+
+      // Create FormData
+      const formData = new FormData()
+      formData.append("prompt", prompt)
+      formData.append("panels", panels)
+      formData.append("style", style)
+
+      // Append images
+      imageFiles.forEach((file) => {
+        formData.append("images", file)
+      })
+
+      // Send to backend
+      const response = await fetch("http://127.0.0.1:8000/api/get-story-board", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        // Navigate to results page on success
+        router.push("/results")
+      } else {
+        console.error("Failed to generate storyboard:", response.statusText)
+        setIsLoading(false)
+      }
+    } catch (error) {
+      console.error("Error creating storyboard:", error)
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -81,9 +153,13 @@ export default function CreatePage() {
                     name="prompt"
                     placeholder="e.g., A young samurai facing a mythical oni under a full moon in a bamboo forest..."
                     value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
+                    onChange={(e) => {
+                      setPrompt(e.target.value)
+                      setErrors((prev) => ({ ...prev, prompt: "" }))
+                    }}
                     className="min-h-[200px] resize-none bg-input border-2 border-border focus:border-primary text-foreground placeholder:text-muted-foreground focus:outline-none"
                   />
+                  {errors.prompt && <p className="text-sm text-red-500">{errors.prompt}</p>}
                   <p className="text-sm text-muted-foreground">
                     Describe your scene, characters, actions, and mood in detail.
                   </p>
@@ -102,9 +178,13 @@ export default function CreatePage() {
                       min="1"
                       max="12"
                       value={panels}
-                      onChange={(e) => setPanels(e.target.value)}
+                      onChange={(e) => {
+                        setPanels(e.target.value)
+                        setErrors((prev) => ({ ...prev, panels: "" }))
+                      }}
                       className="bg-input border-2 border-border focus:border-primary text-foreground"
                     />
+                    {errors.panels && <p className="text-sm text-red-500">{errors.panels}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -156,6 +236,8 @@ export default function CreatePage() {
                   />
                 </label>
 
+                {errors.images && <p className="text-sm text-red-500">{errors.images}</p>}
+
                 {/* Uploaded Images Grid */}
                 {uploadedImages.length > 0 && (
                   <div className="grid grid-cols-2 gap-3">
@@ -185,11 +267,21 @@ export default function CreatePage() {
         <div className="max-w-7xl mx-auto mt-8">
           <Button
             onClick={handleCreate}
+            disabled={isLoading}
             size="lg"
-            className="w-full text-lg py-6 h-auto bg-sakura hover:bg-sakura/90 text-sakura-foreground shadow-lg hover:shadow-xl transition-all duration-300"
+            className="w-full text-lg py-6 h-auto bg-sakura hover:bg-sakura/90 text-sakura-foreground shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Sparkles className="w-5 h-5 mr-2" />
-            Create Now
+            {isLoading ? (
+              <>
+                <div className="w-5 h-5 mr-2 border-2 border-sakura-foreground border-t-transparent rounded-full animate-spin" />
+                Creating...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-5 h-5 mr-2" />
+                Create Now
+              </>
+            )}
           </Button>
         </div>
       </div>
