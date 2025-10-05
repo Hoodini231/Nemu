@@ -5,6 +5,8 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../comp
 import { ArrowLeft, RefreshCw, Edit, Sparkles } from "lucide-react"
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { segmentWorkerCode } from '../../lib/segment-worker-code';
+import { useRouter } from "next/navigation";
+
 
 // --- Sub-Component for Draggable Panel ---
 interface DraggablePanelProps {
@@ -19,10 +21,10 @@ interface DraggablePanelProps {
     handleDragStart: (index: number, event: React.MouseEvent<HTMLDivElement>) => void;
     handleSelect: (index: number) => void;
     handleResize: (index: number, event: React.MouseEvent<HTMLDivElement>, direction: string) => void;
-    onClick?: () => void; // Add onClick to the interface
 }
-const DraggablePanel: React.FC<DraggablePanelProps> = ({ 
-    x, y, width, height, imageSrc, alt, index, isSelected, 
+
+const DraggablePanel: React.FC<DraggablePanelProps> = ({
+    x, y, width, height, imageSrc, alt, index, isSelected,
     handleDragStart, handleSelect, handleResize
 }) => {
     const borderStyle = isSelected
@@ -31,7 +33,6 @@ const DraggablePanel: React.FC<DraggablePanelProps> = ({
 
     return (
         <div
-            key={index}
             style={{
                 position: "absolute",
                 left: `${x}px`,
@@ -45,12 +46,11 @@ const DraggablePanel: React.FC<DraggablePanelProps> = ({
                 userSelect: "none",
             }}
             onMouseDown={(event) => {
-                // only start dragging
                 handleDragStart(index, event);
             }}
             onClick={(e) => {
-                e.stopPropagation(); // prevent parent deselect
-                handleSelect(index); // now selection happens on click
+                e.stopPropagation();
+                handleSelect(index);
             }}
         >
             <img
@@ -79,7 +79,6 @@ const DraggablePanel: React.FC<DraggablePanelProps> = ({
         </div>
     );
 };
-
 // ------------------------------------------
 
 interface Point {
@@ -464,53 +463,72 @@ const SegmentationPopup: React.FC<SegmentationPopupProps> = ({ imageSrc, onClose
     );
 };
 
+interface StoryboardData {
+    panels: string[];
+    coordinates: number[][];
+    total_size: number[];
+    panel_count: number;
+    n8n_data?: any;
+    original_prompt?: string;
+    style?: string;
+    panels_requested?: string;
+}
+
 function FrameWithPanels() {
-    // [x, y, width, height]
-    const initialPanelData = [
-        [46, 0, 259, 249],
-        [46, 250, 259, 204],
-        [307, 0, 249, 454],
-        [46, 455, 510, 440],
-    ];
-
-    const handleResetLayout = () => {
-        setPositions(initialPanelData);  // reset rectangles
-        setSelectedPanel(null);          // also clear selection if you want
-    };
-
-    const coreImage = [602, 895]; // [width, height]
-
-    const panelImages = [
-        "/stub/panel0.png",
-        "/stub/panel1.png",
-        "/stub/panel2.png",
-        "/stub/panel3.png",
-    ];
-
-    const [positions, setPositions] = useState(initialPanelData);
+    const router = useRouter();
+    const [storyboardData, setStoryboardData] = useState<StoryboardData | null>(null);
+    const [initialPositions, setInitialPositions] = useState<number[][]>([]);
+    const [positions, setPositions] = useState<number[][]>([]);
     const [selectedPanel, setSelectedPanel] = useState<number | null>(null);
-    const [activePanel, setActivePanel] = useState<number | null>(null);
     const [isResizing, setIsResizing] = useState(false);
     const [popupImage, setPopupImage] = useState<string | null>(null);
+    const containerRef = React.useRef<HTMLDivElement>(null);
 
-    const handleTogglePanel = (index: number) => {
-        // Toggle selection
+    // Load data from sessionStorage on mount
+    useEffect(() => {
+        const storedData = sessionStorage.getItem('storyboardData');
+        if (storedData) {
+            try {
+                const data: StoryboardData = JSON.parse(storedData);
+                console.log("📦 Loaded storyboard data");
+                setStoryboardData(data);
+                setInitialPositions(data.coordinates);
+                setPositions(data.coordinates);
+            } catch (error) {
+                console.error("Failed to parse storyboard data:", error);
+                router.push("/create");
+            }
+        } else {
+            console.warn("No storyboard data found, redirecting to create page");
+            router.push("/create");
+        }
+    }, [router]);
+
+    const handleResetLayout = () => {
+        setPositions(initialPositions);
+        setSelectedPanel(null);
+    };
+
+    const handleSelect = (index: number) => {
         setSelectedPanel(selectedPanel === index ? null : index);
     };
 
-    const handleDragStart = useCallback((index: number, event: React.MouseEvent<HTMLDivElement>) => {
-        if (isResizing) return; // Prevent drag if resizing
+    const handleDragStart = (index: number, event: React.MouseEvent<HTMLDivElement>) => {
+        if (isResizing) return;
         event.stopPropagation();
 
+        const container = containerRef.current;
+        if (!container) return;
+
         const rect = event.currentTarget.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
         const offsetX = event.clientX - rect.left;
         const offsetY = event.clientY - rect.top;
 
         const onMouseMove = (moveEvent: MouseEvent) => {
-            if (isResizing) return; // Prevent drag if resizing
-
-            const newX = moveEvent.clientX - offsetX - (window.innerWidth / 3 - coreImage[0] / 2);
-            const newY = moveEvent.clientY - offsetY - window.innerHeight * 0.1;
+            const currentContainerRect = container.getBoundingClientRect();
+            const newX = moveEvent.clientX - currentContainerRect.left - offsetX;
+            const newY = moveEvent.clientY - currentContainerRect.top - offsetY;
 
             setPositions(prevPositions => {
                 const updatedPositions = [...prevPositions];
@@ -526,32 +544,36 @@ function FrameWithPanels() {
 
         window.addEventListener("mousemove", onMouseMove);
         window.addEventListener("mouseup", onMouseUp);
-
-        return () => {
-            window.removeEventListener("mousemove", onMouseMove);
-            window.removeEventListener("mouseup", onMouseUp);
-        };
-    }, [isResizing]);
+    };
 
     const handleResize = (index: number, event: React.MouseEvent<HTMLDivElement>, direction: string) => {
+        event.stopPropagation();
         setIsResizing(true);
 
-        const newPositions = [...positions];
+        const container = containerRef.current;
+        if (!container) return;
+
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const startWidth = positions[index][2];
+        const startHeight = positions[index][3];
 
         const onMouseMove = (moveEvent: MouseEvent) => {
-            const deltaX = moveEvent.movementX;
-            const deltaY = moveEvent.movementY;
+            const deltaX = moveEvent.clientX - startX;
+            const deltaY = moveEvent.clientY - startY;
 
-            if (direction === "bottom-right") {
-                newPositions[index] = [
-                    newPositions[index][0],
-                    newPositions[index][1],
-                    newPositions[index][2] + deltaX,
-                    newPositions[index][3] + deltaY,
-                ];
-            }
-
-            setPositions([...newPositions]);
+            setPositions(prevPositions => {
+                const updatedPositions = [...prevPositions];
+                if (direction === "bottom-right") {
+                    updatedPositions[index] = [
+                        updatedPositions[index][0],
+                        updatedPositions[index][1],
+                        Math.max(50, startWidth + deltaX),
+                        Math.max(50, startHeight + deltaY),
+                    ];
+                }
+                return updatedPositions;
+            });
         };
 
         const onMouseUp = () => {
@@ -604,18 +626,28 @@ function FrameWithPanels() {
         setPopupImage(null);
     };
 
+    // Show loading state while data is loading
+    if (!storyboardData) {
+        return (
+            <div style={{ textAlign: "center", padding: "40px" }}>
+                <p>Loading storyboard...</p>
+            </div>
+        );
+    }
+
     return (
         <div style={{ display: "flex", justifyContent: "center", gap: "20px" }}>
             <Card className="max-w-6xl bg-white/95 backdrop-blur-sm border-4 border-foreground shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1" style={{
                 backgroundImage: "linear-gradient(to right, #e0e0e0 1px, transparent 1px), linear-gradient(to bottom, #e0e0e0 1px, transparent 1px)",
                 backgroundSize: "20px 20px",
-                width: `${coreImage[0] * 1.1}px`,
-                height: `${coreImage[1] * 1.1}px`,
+                width: `${storyboardData.total_size[0] * 1.1}px`,
+                height: `${storyboardData.total_size[1] * 1.1}px`,
             }}>
                 <CardHeader>
                 </CardHeader>
                 <CardContent>
                     <div
+                        ref={containerRef}
                         style={{
                             position: "relative",
                             width: "100%",
@@ -631,13 +663,12 @@ function FrameWithPanels() {
                                 y={y}
                                 width={width}
                                 height={height}
-                                imageSrc={panelImages[index]}
+                                imageSrc={storyboardData.panels[index]}
                                 alt={`Panel ${index + 1}`}
                                 isSelected={selectedPanel === index}
-                                handleSelect={handleTogglePanel}
+                                handleSelect={handleSelect}
                                 handleDragStart={handleDragStart}
                                 handleResize={handleResize}
-                                onClick={() => handleTogglePanel(index)}
                             />
                         ))}
                     </div>
@@ -650,57 +681,58 @@ function FrameWithPanels() {
                 padding: "20px",
                 overflowY: "auto",
             }}>
-                    <CardHeader className="relative">
-                        <div className="absolute inset-0 items-center justify-center w-70 h-10 -rotate-5">
-                            <img
-                                src="/highlight_orange.png"
-                                alt="Background"
-                                className="w-full h-full object-cover pointer-events-none"
-                            />
-                            </div>
-                        <CardTitle className="text-2xl font-black text-foreground relative">{selectedPanel !== null ? `Panel ${selectedPanel + 1} Info` : "Overall Info"}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                <CardHeader className="relative">
+                    <div className="absolute inset-0 items-center justify-center w-70 h-10 -rotate-5">
+                        <img
+                            src="/highlight_orange.png"
+                            alt="Background"
+                            className="w-full h-full object-cover pointer-events-none"
+                        />
+                    </div>
+                    <CardTitle className="text-2xl font-black text-foreground relative">
+                        {selectedPanel !== null ? `Panel ${selectedPanel + 1} Info` : "Overall Info"}
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
                     {selectedPanel !== null ? (
-                       <div className="space-y-4 tp-24">
-                        <div className="grid flex gap-4 mt-20">
-                            <button
-                            className="washi-tape-pink w-60 backdrop-blur-sm border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1"
-                            style={{
-                                padding: "10px 20px",
-                                borderRadius: "5px",
-                                cursor: "pointer",
-                            }}
-                            onClick={() => handleSegmentLayersClick(panelImages[selectedPanel!])}
-                            >
-                            Regenerate this panel
-                            </button>
-                            <button
-                            className="washi-tape-blue w-60 backdrop-blur-sm border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1"
-                            style={{
-                                padding: "10px 20px",
-                                borderRadius: "5px",
-                                cursor: "pointer",
-                            }}
-                            onClick={() => {
-                                const link = document.createElement('a');
-                                link.href = panelImages[selectedPanel]; // Use the selected panel image URL
-                                link.download = `panel-${selectedPanel + 1}.png`; // Set the file name
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                            }}
-                            >
-                            Save My File
-                            </button>
+                        <div className="space-y-4 tp-24">
+                            <div className="grid flex gap-4 mt-20">
+                                <button
+                                    className="washi-tape-pink w-60 backdrop-blur-sm border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1"
+                                    style={{
+                                        padding: "10px 20px",
+                                        borderRadius: "5px",
+                                        cursor: "pointer",
+                                    }}
+                                    onClick={() => handleSegmentLayersClick(storyboardData.panels[selectedPanel])}
+                                >
+                                    Regenerate this panel
+                                </button>
+                                <button
+                                    className="washi-tape-blue w-60 backdrop-blur-sm border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1"
+                                    style={{
+                                        padding: "10px 20px",
+                                        borderRadius: "5px",
+                                        cursor: "pointer",
+                                    }}
+                                    onClick={() => {
+                                        const link = document.createElement('a');
+                                        link.href = storyboardData.panels[selectedPanel];
+                                        link.download = `panel-${selectedPanel + 1}.png`;
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                    }}
+                                >
+                                    Save My File
+                                </button>
+                            </div>
                         </div>
-                        </div>
-
                     ) : (
                         <div>
                             <p style={{ fontSize: "14px", color: "#555" }}>Select a panel to see details and actions.</p>
-                             <div className="flex gap-2 mt-35">
-                                    <button
+                            <div className="flex gap-2 mt-35">
+                                <button
                                     className="washi-tape-mint w-30 backdrop-blur-sm border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1"
                                     style={{
                                         padding: "10px 20px",
@@ -708,21 +740,29 @@ function FrameWithPanels() {
                                         cursor: "pointer",
                                     }}
                                     onClick={() => handleResetLayout()}
-                                    >
+                                >
                                     Reset Layout
-                                    </button>
-                                    <button
+                                </button>
+                                <button
                                     className="washi-tape-pink w-30 backdrop-blur-sm border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1"
                                     style={{
                                         padding: "10px 20px",
                                         borderRadius: "5px",
                                         cursor: "pointer",
                                     }}
-                                    onClick={() => handleSegmentLayersClick(panelImages[selectedPanel!])}
-                                    >
+                                    onClick={() => {
+                                        // Download all panels as PNG
+                                        const link = document.createElement('a');
+                                        link.href = storyboardData.panels[0];
+                                        link.download = 'storyboard.png';
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                    }}
+                                >
                                     Save Original PNG
-                                    </button>
-                                    <button
+                                </button>
+                                <button
                                     className="washi-tape-blue w-30 backdrop-blur-sm border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1"
                                     style={{
                                         padding: "10px 20px",
@@ -730,13 +770,14 @@ function FrameWithPanels() {
                                         cursor: "pointer",
                                     }}
                                     onClick={() => {
+                                        // PSD export placeholder
+                                        alert("PSD export coming soon!");
                                     }}
-                                    >
+                                >
                                     Save Original PSD
-                                    </button>
-                                </div>
+                                </button>
+                            </div>
                         </div>
-                        
                     )}
                 </CardContent>
             </Card>
@@ -856,7 +897,7 @@ export default function ResultsPage() {
                         <div className="inline-block mb-2">
                             <div className="washi-tape washi-tape-lavender text-sm font-medium text-foreground w-30">✨ Generated</div>
                         </div>
-                        
+
                         <CardTitle className="text-3xl md:text-4xl font-bold text-foreground">Your Storyboard Creation</CardTitle>
                     </CardHeader>
                     <CardContent>
