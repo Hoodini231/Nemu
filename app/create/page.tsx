@@ -144,9 +144,9 @@ export default function CreatePage() {
         if (data.status === "success") {
           // Store panel data in sessionStorage to pass to results page
           const panelData = {
-            panels: data.panels,  // Base64 encoded panel images
-            coordinates: data.coordinates,  // Panel positions [x, y]
-            total_size: data.total_size,  // Original image dimensions [width, height]
+            panels: data.panels,
+            coordinates: data.coordinates,
+            total_size: data.total_size,
             panel_count: data.panel_count,
             n8n_data: data.n8n_data,
             original_prompt: prompt,
@@ -155,22 +155,21 @@ export default function CreatePage() {
           }
 
           sessionStorage.setItem('storyboardData', JSON.stringify(panelData))
-
-          // Navigate to results page with panel data
+          console.log(`✅ Generated ${data.panel_count} panels`)
           router.push("/results")
         } else {
-          console.error("Backend returned error:", data.error || data.message)
+          console.error("Backend error:", data.error || data.message)
           setErrors(prev => ({ ...prev, backend: data.error || data.message || "Unknown error occurred" }))
           setIsLoading(false)
         }
       } else {
         const errorData = await response.json().catch(() => ({}))
-        console.error("Failed to generate storyboard:", errorData.message || response.statusText)
+        console.error("Request failed:", response.status, errorData.message || response.statusText)
         setErrors(prev => ({ ...prev, backend: errorData.message || response.statusText || "Failed to connect to server" }))
         setIsLoading(false)
       }
     } catch (error) {
-      console.error("Error creating storyboard:", error)
+      console.error("Error:", error)
       setIsLoading(false)
     }
   }

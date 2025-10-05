@@ -3,7 +3,8 @@ import Link from "next/link"
 import { Button } from "../../components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../components/ui/card"
 import { ArrowLeft, RefreshCw, Edit, Sparkles } from "lucide-react"
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 // --- Sub-Component for Draggable Panel ---
 interface DraggablePanelProps {
@@ -72,27 +73,42 @@ const DraggablePanel: React.FC<DraggablePanelProps> = ({
 // ------------------------------------------
 
 
+interface StoryboardData {
+    panels: string[];  // Base64 encoded panel images
+    coordinates: number[][];  // Panel positions [x, y, width, height]
+    total_size: number[];  // Original image dimensions [width, height]
+    panel_count: number;
+    n8n_data?: any;
+    original_prompt?: string;
+    style?: string;
+    panels_requested?: string;
+}
+
 function FrameWithPanels() {
-    // [x, y, width, height]
-    const initialPanelData = [
-        [46, 0, 259, 249],
-        [46, 250, 259, 204],
-        [307, 0, 249, 454],
-        [46, 455, 510, 440],
-    ];
-
-    const coreImage = [602, 895]; // [width, height]
-
-    const panelImages = [
-        "/stub/panel0.png",
-        "/stub/panel1.png",
-        "/stub/panel2.png",
-        "/stub/panel3.png",
-    ];
-
-    const [positions, setPositions] = useState(initialPanelData);
-    // New state to track the currently selected panel
+    const router = useRouter();
+    const [storyboardData, setStoryboardData] = useState<StoryboardData | null>(null);
+    const [positions, setPositions] = useState<number[][]>([]);
     const [selectedPanel, setSelectedPanel] = useState<number | null>(null);
+
+    // Load data from sessionStorage on mount
+    useEffect(() => {
+        const storedData = sessionStorage.getItem('storyboardData');
+        if (storedData) {
+            try {
+                const data: StoryboardData = JSON.parse(storedData);
+                console.log("📦 Loaded storyboard data:", data);
+                setStoryboardData(data);
+                // Initialize positions from coordinates
+                setPositions(data.coordinates);
+            } catch (error) {
+                console.error("Failed to parse storyboard data:", error);
+                router.push("/create");
+            }
+        } else {
+            console.warn("No storyboard data found, redirecting to create page");
+            router.push("/create");
+        }
+    }, [router]);
 
     // Handler to set the selected panel
     const handleSelect = (index: number) => {
@@ -135,7 +151,7 @@ function FrameWithPanels() {
         // 4. Attach global listeners to start the drag
         window.addEventListener("mousemove", onMouseMove);
         window.addEventListener("mouseup", onMouseUp);
-        
+
         // Prevent the browser from trying to select text/image while dragging
         // This is a browser default that needs to be prevented for smooth dragging
         return () => {
@@ -144,12 +160,21 @@ function FrameWithPanels() {
         };
     }, []); // Empty dependency array, as the logic relies on event and state setter
 
+    // Show loading state while data is loading
+    if (!storyboardData) {
+        return (
+            <div style={{ textAlign: "center", padding: "40px" }}>
+                <p>Loading storyboard...</p>
+            </div>
+        );
+    }
+
     return (
         <div
             style={{
                 position: "relative",
-                width: `${coreImage[0]}px`,
-                height: `${coreImage[1]}px`,
+                width: `${storyboardData.total_size[0]}px`,
+                height: `${storyboardData.total_size[1]}px`,
                 border: "2px solid black",
                 margin: "0 auto",
             }}
@@ -164,7 +189,7 @@ function FrameWithPanels() {
                     y={y}
                     width={width}
                     height={height}
-                    imageSrc={panelImages[index]}
+                    imageSrc={storyboardData.panels[index]}
                     alt={`Panel ${index + 1}`}
                     isSelected={selectedPanel === index}
                     handleSelect={handleSelect}
