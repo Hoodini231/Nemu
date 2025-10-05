@@ -288,6 +288,7 @@ const SegmentationPopup: React.FC<SegmentationPopupProps> = ({
         const maskDataURL = maskCanvasRef.current.toDataURL('image/png');
         
         // Call the regeneration callback
+        onRegenerate(imageSrc, maskDataURL, prompt);
     };
 
     return (
@@ -318,7 +319,9 @@ const SegmentationPopup: React.FC<SegmentationPopupProps> = ({
                 onClick={(e) => e.stopPropagation()}
             >
                 <CardHeader>
-                    <CardTitle>Segment & Regenerate Panel</CardTitle>
+                    <div style={{ width: 300 }}>
+                        <CardTitle className="text-3xl font-black text-foreground">Segment & Regenerate Panel</CardTitle>
+                    </div>  
                     <div className="space-y-2">
                         <p className="text-sm text-muted-foreground">{status}</p>
                         {!isEncoded && (
@@ -521,7 +524,7 @@ const SegmentationPopup: React.FC<SegmentationPopupProps> = ({
                                         alert('Failed to export mask');
                                     }
                                 }}
-                                className="washi-tape-mint w-full backdrop-blur-sm border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300"
+                                className="washi-tape-blue w-full backdrop-blur-sm border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300"
                                 style={{ padding: '10px', borderRadius: '5px' }}
                             >
                                 Save Masked Pixels
@@ -532,19 +535,42 @@ const SegmentationPopup: React.FC<SegmentationPopupProps> = ({
                 
                 <button
                     onClick={onClose}
+                    aria-label="Close popup"
+                    title="Close"
                     style={{
                         position: "absolute",
                         top: "10px",
                         right: "10px",
-                        backgroundColor: "red",
+                        backgroundColor: "#ff4d6d",
                         color: "white",
                         border: "none",
-                        borderRadius: "5px",
-                        padding: "5px 10px",
-                        cursor: "pointer",
+                        borderRadius: "999px",
+                        width: 42,
+                        height: 42,
+                        padding: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 6px 0 rgba(0,0,0,0.15)',
+                        transform: 'rotate(0deg)',
+                        transition: 'transform 150ms ease, box-shadow 150ms ease',
+                        cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.transform = 'rotate(-10deg) scale(1.05)';
+                        (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 10px 0 rgba(0,0,0,0.18)';
+                    }}
+                    onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.transform = 'rotate(0deg) scale(1)';
+                        (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 6px 0 rgba(0,0,0,0.15)';
                     }}
                 >
-                    Close
+                    {/* Comic-style X */}
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                        <path d="M6 6L18 18" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M6 18L18 6" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                        <circle cx="12" cy="12" r="11" stroke="rgba(255,255,255,0.06)" strokeWidth="2" />
+                    </svg>
                 </button>
             </Card>
         </div>
