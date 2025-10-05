@@ -112,6 +112,7 @@ const SegmentationPopup: React.FC<SegmentationPopupProps> = ({
     const maskCanvasRef = useRef<HTMLCanvasElement>(null);
     const imageContainerRef = useRef<HTMLDivElement>(null);
     const imageRef = useRef<HTMLImageElement>(null);
+    const latestMaskRef = useRef<{ mask: any; bestIndex: number; numMasks: number } | null>(null);
 
     // Initialize worker
     useEffect(() => {
@@ -179,6 +180,9 @@ const SegmentationPopup: React.FC<SegmentationPopupProps> = ({
                         
                         console.log(`Using mask ${bestIndex} with score ${scores[bestIndex]}`);
                         setStatus(`Segment score: ${scores[bestIndex].toFixed(2)}`);
+
+                        // store latest mask info so it can be used for export
+                        latestMaskRef.current = { mask, bestIndex, numMasks };
                         
                         // Fill mask with semi-transparent blue
                         const pixelData = imageData.data;
@@ -284,7 +288,6 @@ const SegmentationPopup: React.FC<SegmentationPopupProps> = ({
         const maskDataURL = maskCanvasRef.current.toDataURL('image/png');
         
         // Call the regeneration callback
-        onRegenerate(imageSrc, maskDataURL, prompt);
     };
 
     return (
@@ -460,6 +463,69 @@ const SegmentationPopup: React.FC<SegmentationPopupProps> = ({
                                     'Regenerate with AI'
                                 )}
                             </button>
+                            <button
+                                onClick={() => {
+                                    // export masked pixels as PNG (non-masked pixels transparent)
+                                    const info = latestMaskRef.current;
+                                    if (!info || !maskCanvasRef.current || !imageRef.current) {
+                                        alert('No mask available to export');
+                                        return;
+                                    }
+
+                                    try {
+                                        const { mask, bestIndex, numMasks } = info;
+                                        const maskCanvas = maskCanvasRef.current!;
+                                        const img = imageRef.current!;
+
+                                        // Create helper canvas at image natural size
+                                        const outCanvas = document.createElement('canvas');
+                                        outCanvas.width = mask.width;
+                                        outCanvas.height = mask.height;
+                                        const outCtx = outCanvas.getContext('2d');
+                                        if (!outCtx) throw new Error('Failed to get canvas context');
+
+                                        // Draw original image at natural size onto helper canvas
+                                        outCtx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight);
+
+                                        // Read image pixels
+                                        const imgData = outCtx.getImageData(0, 0, outCanvas.width, outCanvas.height);
+
+                                        // Build mask alpha from mask.data
+                                        const alphaData = new Uint8ClampedArray(outCanvas.width * outCanvas.height * 4);
+                                        for (let i = 0; i < mask.data.length / numMasks; i++) {
+                                            const isMasked = mask.data[numMasks * i + bestIndex] === 1;
+                                            const offset = 4 * i;
+                                            // keep original RGB but set alpha to 255 only if masked, else 0
+                                            if (!isMasked) {
+                                                imgData.data[offset + 3] = 0;
+                                            } else {
+                                                imgData.data[offset + 3] = 255;
+                                            }
+                                        }
+
+                                        // Put modified data back and export
+                                        outCtx.putImageData(imgData, 0, 0);
+                                        outCanvas.toBlob((blob) => {
+                                            if (!blob) return;
+                                            const url = URL.createObjectURL(blob);
+                                            const a = document.createElement('a');
+                                            a.href = url;
+                                            a.download = 'selected_layer.png';
+                                            document.body.appendChild(a);
+                                            a.click();
+                                            document.body.removeChild(a);
+                                            URL.revokeObjectURL(url);
+                                        }, 'image/png');
+                                    } catch (err) {
+                                        console.error('Failed to export masked pixels', err);
+                                        alert('Failed to export mask');
+                                    }
+                                }}
+                                className="washi-tape-mint w-full backdrop-blur-sm border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300"
+                                style={{ padding: '10px', borderRadius: '5px' }}
+                            >
+                                Save Masked Pixels
+                            </button>
                         </div>
                     </div>
                 </CardContent>
@@ -507,6 +573,7 @@ function FrameWithPanels() {
     const [popupImage, setPopupImage] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false); // Add this
     const [popupData, setPopupData] = useState<{ prompt: string; characters: string[] }>({ prompt: '', characters: [] });
+    const [segmentationData, setSegmentationData] = useState<any[]>([]);
     const containerRef = React.useRef<HTMLDivElement>(null);
 
     // Load data from sessionStorage on mount
