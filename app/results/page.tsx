@@ -85,6 +85,7 @@ interface StoryboardData {
     total_size: number[];
     panel_count: number;
     n8n_data?: any;
+    final_image: string;
     original_prompt?: string;
     style?: string;
     panels_requested?: string;
@@ -98,6 +99,7 @@ function FrameWithPanels() {
     const [selectedPanel, setSelectedPanel] = useState<number | null>(null);
     const [isResizing, setIsResizing] = useState(false);
     const [popupImage, setPopupImage] = useState<string | null>(null);
+    const [popupData, setPopupData] = useState<{ prompt: string; characters: string[] }>({ prompt: '', characters: [] });
     const containerRef = React.useRef<HTMLDivElement>(null);
 
     // Load data from sessionStorage on mount
@@ -335,30 +337,20 @@ function FrameWithPanels() {
                                         cursor: "pointer",
                                     }}
                                     onClick={() => {
-                                        // Download all panels as PNG
-                                        const link = document.createElement('a');
-                                        link.href = storyboardData.panels[0];
-                                        link.download = 'storyboard.png';
-                                        document.body.appendChild(link);
-                                        link.click();
-                                        document.body.removeChild(link);
+                                        if (storyboardData?.final_image) {
+                                            console.log(`📥 Downloading final image ${storyboardData.final_image}`);
+                                            const link = document.createElement('a');
+                                            link.href = `${storyboardData.final_image}`;
+                                            link.download = 'original_image.png';
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            document.body.removeChild(link);
+                                        } else {
+                                            alert("No final image available to download.");
+                                        }
                                     }}
                                 >
                                     Save Original PNG
-                                </button>
-                                <button
-                                    className="washi-tape-blue w-30 backdrop-blur-sm border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1"
-                                    style={{
-                                        padding: "10px 20px",
-                                        borderRadius: "5px",
-                                        cursor: "pointer",
-                                    }}
-                                    onClick={() => {
-                                        // PSD export placeholder
-                                        alert("PSD export coming soon!");
-                                    }}
-                                >
-                                    Save Original PSD
                                 </button>
                             </div>
                         </div>
@@ -414,8 +406,13 @@ function FrameWithPanels() {
                             }}
                         >
                             <h2 style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "10px" }}>{"Information"}</h2>
-                            <p style={{ fontSize: "14px", color: "#555" }}>Details about the selected panel can go here.</p>
-                            {/* Add more information or controls here */}
+                            <p style={{ fontSize: "14px", color: "#555" }}><strong>Prompt:</strong> {popupData.prompt}</p>
+                            <ul style={{ fontSize: "14px", color: "#555" }}>
+                                {popupData.characters.map((character, index) => (
+                                    <li key={index}>{character}</li>
+                                ))}
+                            </ul>
+                            
                         </div>
                         <button
                             style={{
@@ -471,7 +468,7 @@ export default function ResultsPage() {
                 <Card className="max-w-6xl mx-auto mb-8 bg-white/95 backdrop-blur-sm border-4 border-foreground shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1">
                     <CardHeader>
                         <div className="inline-block mb-2">
-                            <div className="washi-tape washi-tape-lavender text-sm font-medium text-foreground w-30">✨ Generated</div>
+                            <div className="washi-tape washi-tape-lavender text-sm font-medium text-foreground w-40">✨ Generated</div>
                         </div>
 
                         <CardTitle className="text-3xl md:text-4xl font-bold text-foreground">Your Storyboard Creation</CardTitle>
