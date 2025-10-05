@@ -19,7 +19,6 @@ export default function CreatePage() {
   const [prompt, setPrompt] = useState("woof")
   const [panels, setPanels] = useState("4")
   const [style, setStyle] = useState("shonen")
-  const [uploadedImages, setUploadedImages] = useState<string[]>([])
   const [illustrationImages, setIllustrationImages] = useState<string[]>([])
   const [characterImages, setCharacterImages] = useState<string[]>([])
   const [characterNames, setCharacterNames] = useState<string[]>([])
@@ -27,17 +26,9 @@ export default function CreatePage() {
     prompt: "",
     panels: "",
     images: "",
+    backend: ""  // Add backend error state
   })
   const [isLoading, setIsLoading] = useState(false)
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (files) {
-      const newImages = Array.from(files).map((file) => URL.createObjectURL(file))
-      setUploadedImages((prev) => [...prev, ...newImages])
-      setErrors((prev) => ({ ...prev, images: "" }))
-    }
-  }
 
   const handleIllustrationUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files
@@ -54,10 +45,6 @@ export default function CreatePage() {
       setCharacterImages((prev) => [...prev, ...newImages])
       setCharacterNames((prev) => [...prev, ...Array(files.length).fill("")])
     }
-  }
-
-  const removeImage = (index: number) => {
-    setUploadedImages((prev) => prev.filter((_, i) => i !== index))
   }
 
   const removeIllustrationImage = (index: number) => {
@@ -83,6 +70,7 @@ export default function CreatePage() {
       prompt: "",
       panels: "",
       images: "",
+      backend: "",
     }
 
     if (!prompt.trim()) {
@@ -137,10 +125,12 @@ export default function CreatePage() {
         formData.append("character_images", file)
       })
 
-      // Append character names
-      characterNames.forEach((name) => {
-        formData.append("character_names", name)
-      })
+      // Append character names (ensure at least one entry for FastAPI validation)
+      if (characterNames.length > 0) {
+        characterNames.forEach((name) => {
+          formData.append("character_names", name)
+        })
+      }
 
       // Send to backend
       const response = await fetch("http://127.0.0.1:8000/api/get-story-board", {
@@ -150,10 +140,33 @@ export default function CreatePage() {
 
       if (response.ok) {
         const data = await response.json()
-        // Navigate to results page on success
-        router.push("/results")
+
+        if (data.status === "success") {
+          // Store panel data in sessionStorage to pass to results page
+          const panelData = {
+            panels: data.panels,  // Base64 encoded panel images
+            coordinates: data.coordinates,  // Panel positions [x, y]
+            total_size: data.total_size,  // Original image dimensions [width, height]
+            panel_count: data.panel_count,
+            n8n_data: data.n8n_data,
+            original_prompt: prompt,
+            style: style,
+            panels_requested: panels
+          }
+
+          sessionStorage.setItem('storyboardData', JSON.stringify(panelData))
+
+          // Navigate to results page with panel data
+          router.push("/results")
+        } else {
+          console.error("Backend returned error:", data.error || data.message)
+          setErrors(prev => ({ ...prev, backend: data.error || data.message || "Unknown error occurred" }))
+          setIsLoading(false)
+        }
       } else {
-        console.error("Failed to generate storyboard:", response.statusText)
+        const errorData = await response.json().catch(() => ({}))
+        console.error("Failed to generate storyboard:", errorData.message || response.statusText)
+        setErrors(prev => ({ ...prev, backend: errorData.message || response.statusText || "Failed to connect to server" }))
         setIsLoading(false)
       }
     } catch (error) {
@@ -214,12 +227,12 @@ export default function CreatePage() {
             <Card className="bg-white/95 backdrop-blur-sm border-4 border-foreground shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1 relative overflow-hidden">
               <CardHeader className="relative">
                 <div className="absolute inset-y-0 right-238 items-center justify-center w-70 h-10 -rotate-5">
-                    <img
-                        src="/highlight_yellow.png"
-                        alt="Background"
-                        className="w-full h-full object-cover pointer-events-none"
-                    />
-                    </div>
+                  <img
+                    src="/highlight_yellow.png"
+                    alt="Background"
+                    className="w-full h-full object-cover pointer-events-none"
+                  />
+                </div>
                 <CardTitle className="text-2xl font-black text-foreground relative">Create Your Storyboard</CardTitle>
               </CardHeader>
               <CardContent className="p-8 space-y-4 relative">
@@ -235,7 +248,7 @@ export default function CreatePage() {
                     value={prompt}
                     onChange={(e) => {
                       setPrompt(e.target.value)
-                      setErrors((prev) => ({ ...prev, prompt: "" }))
+                      setErrors((prev) => ({ ...prev, prompt: "", backend: "" }))
                     }}
                     className="min-h-[200px] resize-none bg-input border-2 border-border focus:border-primary text-foreground placeholder:text-muted-foreground focus:outline-none"
                   />
@@ -260,7 +273,7 @@ export default function CreatePage() {
                       value={panels}
                       onChange={(e) => {
                         setPanels(e.target.value)
-                        setErrors((prev) => ({ ...prev, panels: "" }))
+                        setErrors((prev) => ({ ...prev, panels: "", backend: "" }))
                       }}
                       className="bg-input border-2 border-border focus:border-primary text-foreground"
                     />
@@ -294,15 +307,15 @@ export default function CreatePage() {
             <div className="grid md:grid-cols-2 gap-6">
               <Card className="bg-white/95 backdrop-blur-sm border-4 border-foreground shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1 relative overflow-hidden">
                 <CardHeader className="relative">
-                <div className="absolute top-0 right-87 flex items-center justify-center w-60 h-12 -rotate-3">
+                  <div className="absolute top-0 right-87 flex items-center justify-center w-60 h-12 -rotate-3">
                     <img
-                        src="/highlight_green.png"
-                        alt="Background"
-                        className="w-full h-full object-cover pointer-events-none"
+                      src="/highlight_green.png"
+                      alt="Background"
+                      className="w-full h-full object-cover pointer-events-none"
                     />
-                    </div>
-                <CardTitle className="text-2xl font-black text-foreground relative">Contextualise your art!</CardTitle>
-              </CardHeader>
+                  </div>
+                  <CardTitle className="text-2xl font-black text-foreground relative">Contextualise your art!</CardTitle>
+                </CardHeader>
                 <CardContent className="p-8 space-y-4 relative">
                   {/* Upload Box */}
                   <label htmlFor="file-upload" className="block">
@@ -346,18 +359,18 @@ export default function CreatePage() {
                 </CardContent>
               </Card>
 
-              
+
 
               <Card className="bg-white/95 backdrop-blur-sm border-4 border-foreground shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1 relative overflow-hidden">
                 <CardHeader className="relative">
-                    <div className="absolute top-0 right-89 flex items-center justify-center w-60 h-12 -rotate-3">
-                        <img
-                            src="/highlight_pink.png"
-                            alt="Background"
-                            className="w-full h-full object-cover pointer-events-none"
-                        />
-                        </div>
-                    <CardTitle className="text-2xl font-black text-foreground relative">Add your Characters!</CardTitle>
+                  <div className="absolute top-0 right-89 flex items-center justify-center w-60 h-12 -rotate-3">
+                    <img
+                      src="/highlight_pink.png"
+                      alt="Background"
+                      className="w-full h-full object-cover pointer-events-none"
+                    />
+                  </div>
+                  <CardTitle className="text-2xl font-black text-foreground relative">Add your Characters!</CardTitle>
                 </CardHeader>
                 <CardContent className="p-8 space-y-4 relative">
                   {/* Upload Box */}
@@ -409,6 +422,18 @@ export default function CreatePage() {
             </div>
           </div>
         </div>
+
+        {/* Error Display */}
+        {errors.backend && (
+          <div className="max-w-7xl mx-auto mb-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center">
+                <div className="text-red-600 font-medium">Error:</div>
+                <div className="text-red-700 ml-2">{errors.backend}</div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Create Button */}
         <div className="max-w-7xl mx-auto mt-8">
