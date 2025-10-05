@@ -148,6 +148,7 @@ export default function CreatePage() {
             coordinates: data.coordinates,
             total_size: data.total_size,
             panel_count: data.panel_count,
+            final_image: data.final_image,
             n8n_data: data.n8n_data,
             original_prompt: prompt,
             style: style,
