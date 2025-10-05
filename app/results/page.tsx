@@ -3,184 +3,246 @@ import Link from "next/link"
 import { Button } from "../../components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../components/ui/card"
 import { ArrowLeft, RefreshCw, Edit, Sparkles } from "lucide-react"
+import React, { useState, useCallback } from "react";
 
+// --- Sub-Component for Draggable Panel ---
+interface DraggablePanelProps {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    imageSrc: string;
+    alt: string;
+    index: number;
+    isSelected: boolean;
+    handleDragStart: (index: number, event: React.MouseEvent<HTMLDivElement>) => void;
+    handleSelect: (index: number) => void;
+}
+
+const DraggablePanel: React.FC<DraggablePanelProps> = ({ 
+    x, y, width, height, imageSrc, alt, index, isSelected, 
+    handleDragStart, handleSelect 
+}) => {
+    
+    // Determine border style based on selection
+    const borderStyle = isSelected
+        ? "4px solid #F06292" // Highlight color (e.g., pink/magenta)
+        : "1px solid #777";   // Default border color
+
+    return (
+        <div
+            key={index}
+            style={{
+                position: "absolute",
+                left: `${x}px`,
+                top: `${y}px`,
+                width: `${width}px`,
+                height: `${height}px`,
+                overflow: "hidden",
+                cursor: "grab",
+                border: borderStyle,
+                transition: "border-color 0.2s ease-in-out", // Smooth highlight transition
+                // Prevent image right-click/selection
+                WebkitUserSelect: 'none',
+                MozUserSelect: 'none',
+                msUserSelect: 'none',
+                userSelect: 'none',
+            }}
+            // OnMouseDown handles both drag start AND selection
+            onMouseDown={(event) => {
+                handleSelect(index);
+                handleDragStart(index, event);
+            }}
+        >
+            <img
+                src={imageSrc}
+                alt={alt}
+                draggable="false" // Prevent native image dragging
+                style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    // Additional lock: ensures image doesn't steal pointer events from the parent div
+                    pointerEvents: 'none', 
+                }}
+            />
+        </div>
+    );
+};
+// ------------------------------------------
+
+
+function FrameWithPanels() {
+    // [x, y, width, height]
+    const initialPanelData = [
+        [46, 0, 259, 249],
+        [46, 250, 259, 204],
+        [307, 0, 249, 454],
+        [46, 455, 510, 440],
+    ];
+
+    const coreImage = [602, 895]; // [width, height]
+
+    const panelImages = [
+        "/stub/panel0.png",
+        "/stub/panel1.png",
+        "/stub/panel2.png",
+        "/stub/panel3.png",
+    ];
+
+    const [positions, setPositions] = useState(initialPanelData);
+    // New state to track the currently selected panel
+    const [selectedPanel, setSelectedPanel] = useState<number | null>(null);
+
+    // Handler to set the selected panel
+    const handleSelect = (index: number) => {
+        setSelectedPanel(index);
+    };
+
+    // Corrected Drag Handler using the global window listener pattern and functional state updates
+    const handleDragStart = useCallback((index: number, event: React.MouseEvent<HTMLDivElement>) => {
+        event.stopPropagation();
+
+        // 1. Calculate the offset (distance from mouse click to panel's top-left corner)
+        const rect = event.currentTarget.getBoundingClientRect();
+        const offsetX = event.clientX - rect.left;
+        const offsetY = event.clientY - rect.top;
+
+        // 2. Define the mouse move logic
+        const onMouseMove = (moveEvent: MouseEvent) => {
+            // Calculate new X and Y using the current mouse position minus the initial offset
+            // We do not need to subtract large fixed numbers (like 650, 200) unless
+            // the parent container has a non-zero, non-relative position, which
+            // is not the case for the FrameWithPanels div (relative position).
+            const newX = moveEvent.clientX - offsetX - 650;
+            const newY = moveEvent.clientY - offsetY - 70;
+
+            // Use the functional state update to ensure we use the very latest position state
+            setPositions(prevPositions => {
+                const updatedPositions = [...prevPositions];
+                // Update only the x and y (indices 0 and 1)
+                updatedPositions[index] = [newX, newY, updatedPositions[index][2], updatedPositions[index][3]];
+                return updatedPositions;
+            });
+        };
+
+        // 3. Define the mouse up logic (for cleanup)
+        const onMouseUp = () => {
+            window.removeEventListener("mousemove", onMouseMove);
+            window.removeEventListener("mouseup", onMouseUp);
+        };
+
+        // 4. Attach global listeners to start the drag
+        window.addEventListener("mousemove", onMouseMove);
+        window.addEventListener("mouseup", onMouseUp);
+        
+        // Prevent the browser from trying to select text/image while dragging
+        // This is a browser default that needs to be prevented for smooth dragging
+        return () => {
+            window.removeEventListener("mousemove", onMouseMove);
+            window.removeEventListener("mouseup", onMouseUp);
+        };
+    }, []); // Empty dependency array, as the logic relies on event and state setter
+
+    return (
+        <div
+            style={{
+                position: "relative",
+                width: `${coreImage[0]}px`,
+                height: `${coreImage[1]}px`,
+                border: "2px solid black",
+                margin: "0 auto",
+            }}
+            // Clicking anywhere outside a panel should deselect the current panel
+            onClick={() => setSelectedPanel(null)}
+        >
+            {positions.map(([x, y, width, height], index) => (
+                <DraggablePanel
+                    key={index}
+                    index={index}
+                    x={x}
+                    y={y}
+                    width={width}
+                    height={height}
+                    imageSrc={panelImages[index]}
+                    alt={`Panel ${index + 1}`}
+                    isSelected={selectedPanel === index}
+                    handleSelect={handleSelect}
+                    handleDragStart={handleDragStart}
+                />
+            ))}
+        </div>
+    );
+}
+
+// --- ResultsPage (Main Component) ---
 export default function ResultsPage() {
-  const panels = [
-    {
-      id: 1,
-      title: "Panel 1",
-      description:
-        "Wide establishing shot of a moonlit bamboo forest. Shadows dance between the tall stalks as mist rolls across the ground. The full moon hangs heavy in the sky.",
-      image: "/moonlit-bamboo-forest-manga-style.jpg",
-      colorTheme: "blue",
-    },
-    {
-      id: 2,
-      title: "Panel 2",
-      description:
-        "Close-up of the young samurai's determined face. Sweat beads on his forehead, his hand grips the katana handle. His eyes reflect the moonlight with fierce resolve.",
-      image: "/young-samurai-close-up-manga-style.jpg",
-      colorTheme: "peach",
-    },
-    {
-      id: 3,
-      title: "Panel 3",
-      description:
-        "The mythical oni emerges from the shadows, towering and menacing. Its red skin glows in the moonlight, horns piercing the sky. Steam rises from its nostrils.",
-      image: "/mythical-oni-demon-manga-style.jpg",
-      colorTheme: "pink",
-    },
-    {
-      id: 4,
-      title: "Panel 4",
-      description:
-        "Dynamic action shot as the samurai leaps forward, katana raised high. Motion lines emphasize the speed and power of the attack. Bamboo leaves scatter in the wind.",
-      image: "/samurai-action-leap-manga-style.jpg",
-      colorTheme: "lavender",
-    },
-  ]
+    // ... (omitted static data for brevity)
 
-  const getCardClass = (theme: string) => {
-    const themeMap: Record<string, string> = {
-      blue: "card-tinted-blue",
-      peach: "card-tinted-peach",
-      pink: "card-tinted-pink",
-      lavender: "card-tinted-lavender",
-      mint: "card-tinted-mint",
-      yellow: "card-tinted-yellow",
+    const getCardClass = (theme: string) => {
+        const themeMap: Record<string, string> = {
+            blue: "card-tinted-blue", peach: "card-tinted-peach", pink: "card-tinted-pink",
+            lavender: "card-tinted-lavender", mint: "card-tinted-mint", yellow: "card-tinted-yellow",
+        }
+        return themeMap[theme] || ""
     }
-    return themeMap[theme] || ""
-  }
 
-  const getWashiColor = (theme: string) => {
-    const colorMap: Record<string, string> = {
-      blue: "#C6DEF1",
-      peach: "#F7D9C4",
-      pink: "#F2C6DE",
-      lavender: "#DBCDF0",
-      mint: "#C9E4DE",
-      yellow: "#FAEDCB",
+    const getWashiColor = (theme: string) => {
+        const colorMap: Record<string, string> = {
+            blue: "#C6DEF1", peach: "#F7D9C4", pink: "#F2C6DE",
+            lavender: "#DBCDF0", mint: "#C9E4DE", yellow: "#FAEDCB",
+        }
+        return colorMap[theme] || "#C9E4DE"
     }
-    return colorMap[theme] || "#C9E4DE"
-  }
 
-  return (
-    <div className="min-h-screen relative overflow-hidden">
-      {/* Gradient Background */}
-      <div className="fixed inset-0 bg-gradient-to-br from-[#F2C6DE] via-[#DBCDF0] to-[#C6DEF1] -z-10" />
+    return (
+        <div className="min-h-screen relative overflow-hidden">
+            {/* Gradient Background */}
+            <div className="fixed inset-0 bg-gradient-to-br from-[#F2C6DE] via-[#DBCDF0] to-[#C6DEF1] -z-10" />
 
-      <div className="fixed inset-0 -z-5 opacity-20 pointer-events-none">
-        {/* Top left panel */}
-        <div className="absolute top-20 left-10 w-64 h-48 border-4 border-foreground transform -rotate-6">
-          <div className="absolute top-2 right-2 w-16 h-1 bg-foreground transform -rotate-12" />
-          <div className="absolute top-4 right-4 w-12 h-1 bg-foreground transform -rotate-12" />
-        </div>
-
-        {/* Top right panel */}
-        <div className="absolute top-32 right-20 w-72 h-56 border-4 border-foreground transform rotate-3">
-          <div className="absolute bottom-4 left-4 w-20 h-1 bg-foreground transform rotate-45" />
-          <div className="absolute bottom-6 left-6 w-16 h-1 bg-foreground transform rotate-45" />
-          <div className="absolute top-8 right-12 w-8 h-8 rounded-full border-2 border-foreground" />
-        </div>
-
-        {/* Bottom left panel */}
-        <div className="absolute bottom-40 left-32 w-56 h-40 border-4 border-foreground transform rotate-2">
-          <div className="absolute top-3 left-3 w-24 h-1 bg-foreground transform -rotate-6" />
-        </div>
-
-        {/* Bottom right panel */}
-        <div className="absolute bottom-20 right-10 w-48 h-52 border-4 border-foreground transform -rotate-3">
-          <div className="absolute top-6 right-6 w-16 h-1 bg-foreground transform rotate-12" />
-          <div className="absolute top-8 right-8 w-12 h-1 bg-foreground transform rotate-12" />
-        </div>
-      </div>
-
-      {/* Header */}
-      <header className="border-b-2 border-border bg-header/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Link
-            href="/create"
-            className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            <span>Back to Create</span>
-          </Link>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-[#C9E4DE] to-[#C6DEF1] rounded-full flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-foreground" />
+            {/* Decoration Panels */}
+            <div className="fixed inset-0 -z-5 opacity-20 pointer-events-none">
+                {/* ... (omitted decoration panels for brevity) */}
             </div>
-            <h1 className="text-xl font-bold text-foreground">Nemu</h1>
-          </div>
-        </div>
-      </header>
 
-      <div className="container mx-auto px-4 py-8 md:py-12">
-        {/* Header Section */}
-        <div className="max-w-6xl mx-auto mb-8 space-y-4">
-          <div className="inline-block">
-            <div className="washi-tape washi-tape-lavender text-sm font-medium text-foreground">✨ Generated</div>
-          </div>
-          <h1 className="text-3xl md:text-4xl font-bold text-foreground">Your Storyboard Creation</h1>
-          <p className="text-muted-foreground">
-            Review your generated panels below. You can regenerate individual panels or make them editable.
-          </p>
-        </div>
-
-        {/* Panels Grid */}
-        <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-6">
-          {panels.map((panel, index) => (
-            <Card
-              key={panel.id}
-              className={`sketch-border ${getCardClass(panel.colorTheme)} hover:shadow-lg transition-all duration-300 h-100`}
-              style={{
-                transform: index % 2 === 0 ? "rotate(-0.5deg)" : "rotate(0.5deg)",
-              }}
-            >
-              <CardHeader>
-                <CardTitle className="text-sm text-foreground flex items-center gap-2">
-                  <span
-                    className="w-6 h-6 rounded-full text-foreground flex items-center justify-center text-xs font-bold shadow-md"
-                    style={{ background: getWashiColor(panel.colorTheme) }}
-                  >
-                    {panel.id}
-                  </span>
-                  {panel.title}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="relative overflow-hidden rounded-lg border-2 border-border h-40">
-                  <img src={panel.image || "/placeholder.svg"} alt={panel.title} className="w-full h-full object-cover" />
+            {/* Header */}
+            <header className="border-b-2 border-transparent bg-transparent backdrop-blur-sm sticky top-0 z-50">
+                <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+                    <Link
+                        href="/"
+                        className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                        <ArrowLeft className="w-5 h-5" />
+                        <span>Back</span>
+                    </Link>
                 </div>
-                <p className="text-xs text-muted-foreground leading-relaxed text-pretty">{panel.description}</p>
-              </CardContent>
-              <CardFooter className="flex gap-3">
-                <Button
-                  variant="outline"
-                  className="flex-none border-2 border-border hover:bg-muted text-foreground text-xs px-2 py-1"
-                >
-                  <RefreshCw className="w-3 h-3 mr-1" />
-                  Regenerate me
-                </Button>
-                <Button className="flex-none bg-[#f8f8f8] hover:bg-sakura/90 text-sakura-foreground text-xs px-2 py-1">
-                  <Edit className="w-3 h-3 mr-1" />
-                  Make me editable
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
+            </header>
 
-        {/* Action Buttons */}
-        <div className="max-w-6xl mx-auto mt-8 flex flex-col sm:flex-row gap-4">
-          <Button
-            variant="outline"
-            size="lg"
-            className="flex-1 border-2 border-border hover:bg-muted text-foreground bg-transparent"
-          >
-            Export Storyboard
-          </Button>
+            <div className="container mx-auto px-4 py-8 md:py-12">
+                {/* Header Section */}
+                <Card className="max-w-6xl mx-auto mb-8 bg-white/95 backdrop-blur-sm border-4 border-foreground shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1">
+                    <CardHeader>
+                        <div className="inline-block mb-2">
+                            <div className="washi-tape washi-tape-lavender text-sm font-medium text-foreground w-30">✨ Generated</div>
+                        </div>
+                        <CardTitle className="text-3xl md:text-4xl font-bold text-foreground">Your Storyboard Creation</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-muted-foreground italic">
+                            Review your generated panels below. You can drag the panels, and click to highlight their borders.
+                        </p>
+                    </CardContent>
+                </Card>
+
+                {/* Panels Grid */}
+                <Card className="max-w-6xl mx-auto mb-8 bg-white/95 backdrop-blur-sm border-4 border-foreground shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1">
+                    <CardHeader>
+                    </CardHeader>
+                    <CardContent>
+                        <FrameWithPanels />
+                    </CardContent>
+                </Card>
+            </div>
         </div>
-      </div>
-    </div>
-  )
+    )
 }

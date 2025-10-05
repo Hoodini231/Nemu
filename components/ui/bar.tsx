@@ -19,7 +19,7 @@ export default function InfiniteLogoBanner() {
 ];
 
   return (
-    <div className="relative w-full overflow-hidden py-10 bg-gradient-to-r from-pink-100 via-purple-100 to-indigo-100 border-t-4 mt-10">
+    <div className="relative w-full overflow-hidden py-7 bg-gradient-to-r from-pink-100 via-purple-100 to-indigo-100 border-t-4 mt-10">
       {/* Manga-style comic border */}
       <div className="absolute inset-x-0 top-0 h-[3px] bg-black pointer-events-none" />
       <div className="absolute inset-x-0 bottom-0 h-[3px] bg-black pointer-events-none" />
@@ -29,7 +29,7 @@ export default function InfiniteLogoBanner() {
           {logos.concat(logos).map((logo, i) => (
             <div
               key={i}
-              className="mx-16 flex items-center justify-center grayscale opacity-80 hover:grayscale-0 hover:opacity-100 transition duration-300"
+              className="mx-16 flex items-center justify-center grayscale opacity-80 hover:grayscale-0 hover:opacity-100 transition duration-400"
             >
               <div className="relative w-32 h-16 flex items-center justify-center bg-white border-2 border-black shadow-[3px_3px_0_#000] rounded-lg">
                 <Image
