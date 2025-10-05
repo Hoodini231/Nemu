@@ -65,7 +65,36 @@ export default function ResultsPage() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Gradient Background */}
+      <div className="fixed inset-0 bg-gradient-to-br from-[#F2C6DE] via-[#DBCDF0] to-[#C6DEF1] -z-10" />
+
+      <div className="fixed inset-0 -z-5 opacity-20 pointer-events-none">
+        {/* Top left panel */}
+        <div className="absolute top-20 left-10 w-64 h-48 border-4 border-foreground transform -rotate-6">
+          <div className="absolute top-2 right-2 w-16 h-1 bg-foreground transform -rotate-12" />
+          <div className="absolute top-4 right-4 w-12 h-1 bg-foreground transform -rotate-12" />
+        </div>
+
+        {/* Top right panel */}
+        <div className="absolute top-32 right-20 w-72 h-56 border-4 border-foreground transform rotate-3">
+          <div className="absolute bottom-4 left-4 w-20 h-1 bg-foreground transform rotate-45" />
+          <div className="absolute bottom-6 left-6 w-16 h-1 bg-foreground transform rotate-45" />
+          <div className="absolute top-8 right-12 w-8 h-8 rounded-full border-2 border-foreground" />
+        </div>
+
+        {/* Bottom left panel */}
+        <div className="absolute bottom-40 left-32 w-56 h-40 border-4 border-foreground transform rotate-2">
+          <div className="absolute top-3 left-3 w-24 h-1 bg-foreground transform -rotate-6" />
+        </div>
+
+        {/* Bottom right panel */}
+        <div className="absolute bottom-20 right-10 w-48 h-52 border-4 border-foreground transform -rotate-3">
+          <div className="absolute top-6 right-6 w-16 h-1 bg-foreground transform rotate-12" />
+          <div className="absolute top-8 right-8 w-12 h-1 bg-foreground transform rotate-12" />
+        </div>
+      </div>
+
       {/* Header */}
       <header className="border-b-2 border-border bg-header/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
