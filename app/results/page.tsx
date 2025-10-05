@@ -274,12 +274,53 @@ const SegmentationPopup: React.FC<SegmentationPopupProps> = ({
         }
     };
 
-    // Add the handleRegenerate function
     const handleRegenerateClick = async () => {
         if (!maskCanvasRef.current || !imageRef.current) return;
         
-        // Get mask as data URL
-        const maskDataURL = maskCanvasRef.current.toDataURL('image/png');
+        // Create a new canvas with the original image dimensions
+        const originalCanvas = document.createElement('canvas');
+        const img = imageRef.current;
+        originalCanvas.width = img.naturalWidth;  // Use natural dimensions
+        originalCanvas.height = img.naturalHeight;
+        const ctx = originalCanvas.getContext('2d');
+        
+        if (!ctx) return;
+        
+        // Fill with black (non-masked area)
+        ctx.fillStyle = 'black';
+        ctx.fillRect(0, 0, originalCanvas.width, originalCanvas.height);
+        
+        // Scale and draw the mask in white
+        ctx.fillStyle = 'white';
+        const maskCanvas = maskCanvasRef.current;
+        
+        // Get the mask data
+        const maskCtx = maskCanvas.getContext('2d');
+        if (!maskCtx) return;
+        
+        const maskImageData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+        const maskData = maskImageData.data;
+        
+        // Scale factors
+        const scaleX = originalCanvas.width / maskCanvas.width;
+        const scaleY = originalCanvas.height / maskCanvas.height;
+        
+        // Draw white pixels where mask is active
+        for (let y = 0; y < maskCanvas.height; y++) {
+            for (let x = 0; x < maskCanvas.width; x++) {
+                const idx = (y * maskCanvas.width + x) * 4;
+                // Check if this pixel is part of the mask (blue channel > 0)
+                if (maskData[idx + 2] > 0) {
+                    // Scale to original image size
+                    const origX = Math.floor(x * scaleX);
+                    const origY = Math.floor(y * scaleY);
+                    ctx.fillRect(origX, origY, Math.ceil(scaleX), Math.ceil(scaleY));
+                }
+            }
+        }
+        
+        // Get the properly sized mask as data URL
+        const maskDataURL = originalCanvas.toDataURL('image/png');
         
         // Call the regeneration callback
         onRegenerate(imageSrc, maskDataURL, prompt);
@@ -651,18 +692,35 @@ function FrameWithPanels() {
                 const data = await response.json();
                 
                 if (data.status === 'success') {
+                    console.log('Regeneration successful:', data);
+                    
+                    // The backend returns base64 image data, convert it to data URL
+                    let newPanelUrl = data.regenerated_image;
+                    
+                    // If it's base64 without the data URL prefix, add it
+                    if (!newPanelUrl.startsWith('data:')) {
+                        newPanelUrl = `data:image/png;base64,${newPanelUrl}`;
+                    }
+                    
+                    console.log('New panel URL (base64):', newPanelUrl.substring(0, 50) + '...');
+                    
                     // Update the panel with the new image
                     setStoryboardData(prev => {
                         if (!prev) return prev;
                         const updatedPanels = [...prev.panels];
-                        updatedPanels[selectedPanel] = data.new_panel_url;
-                        return {
+                        updatedPanels[selectedPanel] = newPanelUrl;
+                        
+                        // Also update sessionStorage so the change persists
+                        const updatedData = {
                             ...prev,
                             panels: updatedPanels
                         };
+                        sessionStorage.setItem('storyboardData', JSON.stringify(updatedData));
+                        
+                        return updatedData;
                     });
                     
-                    alert('Panel regenerated successfully!');
+                    // alert('Panel regenerated successfully!');
                     setShowSegmentPopup(false);
                 } else {
                     console.error('Backend error:', data.error || data.message);
@@ -670,7 +728,7 @@ function FrameWithPanels() {
                 }
             } else {
                 const errorData = await response.json().catch(() => ({}));
-                console.error('Request failed:', response.status, errorData.message || response.statusText);
+                console.error('Request failed:', response.status, errorData);
                 alert(`Error: ${errorData.message || response.statusText || 'Failed to connect to server'}`);
             }
         } catch (error) {
