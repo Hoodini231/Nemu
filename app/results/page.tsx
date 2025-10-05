@@ -90,9 +90,15 @@ interface SegmentationPopupProps {
     imageSrc: string;
     onClose: () => void;
     onRegenerate: (originalImage: string, maskImage: string, prompt: string) => void;
+    isLoading?: boolean; // Add this
 }
 
-const SegmentationPopup: React.FC<SegmentationPopupProps> = ({ imageSrc, onClose, onRegenerate }) => {
+const SegmentationPopup: React.FC<SegmentationPopupProps> = ({ 
+    imageSrc, 
+    onClose, 
+    onRegenerate,
+    isLoading = false // Add this with default value
+}) => {
     const [points, setPoints] = useState<Point[]>([]);
     const [isEncoded, setIsEncoded] = useState(false);
     const [isDecoding, setIsDecoding] = useState(false);
@@ -335,64 +341,71 @@ const SegmentationPopup: React.FC<SegmentationPopupProps> = ({ imageSrc, onClose
                             overflow: "hidden",
                             cursor: isEncoded ? "crosshair" : "wait",
                             opacity: isEncoded ? 1 : 0.5,
+                            display: "flex",
+                            justifyContent: "center",
+                            alignItems: "center",
                         }}
                         onMouseDown={isEncoded ? handleImageClick : undefined}
                         onContextMenu={(e) => e.preventDefault()}
                     >
-                        <img
-                            ref={imageRef}
-                            src={imageSrc}
-                            alt="Panel"
-                            style={{
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "contain",
-                            }}
-                        />
-                        {!isEncoded && (
-                            <div
+                        <div style={{ position: "relative", display: "inline-block" }}>
+                            <img
+                                ref={imageRef}
+                                src={imageSrc}
+                                alt="Panel"
                                 style={{
-                                    position: "absolute",
-                                    top: "50%",
-                                    left: "50%",
-                                    transform: "translate(-50%, -50%)",
-                                    backgroundColor: "rgba(255, 255, 255, 0.9)",
-                                    padding: "20px",
-                                    borderRadius: "10px",
-                                    textAlign: "center",
+                                    maxWidth: "100%",
+                                    maxHeight: "100%",
+                                    objectFit: "contain",
+                                    display: "block",
                                 }}
-                            >
-                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4" />
-                                <p className="font-semibold">{status}</p>
-                            </div>
-                        )}
-                        <canvas
-                            ref={maskCanvasRef}
-                            style={{
-                                position: "absolute",
-                                top: 0,
-                                left: 0,
-                                width: "100%",
-                                height: "100%",
-                                pointerEvents: "none",
-                            }}
-                        />
-                        {points.map((point, idx) => (
-                            <div
-                                key={idx}
+                            />
+                            {!isEncoded && (
+                                <div
+                                    style={{
+                                        position: "absolute",
+                                        top: "50%",
+                                        left: "50%",
+                                        transform: "translate(-50%, -50%)",
+                                        backgroundColor: "rgba(255, 255, 255, 0.9)",
+                                        padding: "20px",
+                                        borderRadius: "10px",
+                                        textAlign: "center",
+                                    }}
+                                >
+                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4" />
+                                    <p className="font-semibold">{status}</p>
+                                </div>
+                            )}
+                            <canvas
+                                ref={maskCanvasRef}
                                 style={{
                                     position: "absolute",
-                                    left: `${point.point[0] * 100}%`,
-                                    top: `${point.point[1] * 100}%`,
-                                    width: "10px",
-                                    height: "10px",
-                                    borderRadius: "50%",
-                                    backgroundColor: point.label === 1 ? "#00ff00" : "#ff0000",
-                                    transform: "translate(-50%, -50%)",
+                                    top: 0,
+                                    left: 0,
+                                    width: "100%",
+                                    height: "100%",
                                     pointerEvents: "none",
                                 }}
                             />
-                        ))}
+                            {points.map((point, idx) => (
+                                <div
+                                    key={idx}
+                                    style={{
+                                        position: "absolute",
+                                        left: `${point.point[0] * 100}%`,
+                                        top: `${point.point[1] * 100}%`,
+                                        width: "10px",
+                                        height: "10px",
+                                        borderRadius: "50%",
+                                        backgroundColor: point.label === 1 ? "#00ff00" : "#ff0000",
+                                        transform: "translate(-50%, -50%)",
+                                        pointerEvents: "none",
+                                        zIndex: 10,
+                                    }}
+                                />
+                            ))}
+                        </div>
                     </div>
                     
                     <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "10px", padding: "20px" }}>
@@ -427,16 +440,23 @@ const SegmentationPopup: React.FC<SegmentationPopupProps> = ({ imageSrc, onClose
                             </button>
                             <button
                                 onClick={handleRegenerateClick}
-                                disabled={points.length === 0 || !prompt || !isEncoded}
+                                disabled={points.length === 0 || !prompt || !isEncoded || isLoading}
                                 className="washi-tape-pink w-full backdrop-blur-sm border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300"
                                 style={{ 
                                     padding: "10px", 
                                     borderRadius: "5px",
-                                    opacity: (points.length > 0 && prompt && isEncoded) ? 1 : 0.5,
-                                    cursor: (points.length > 0 && prompt && isEncoded) ? "pointer" : "not-allowed"
+                                    opacity: (points.length > 0 && prompt && isEncoded && !isLoading) ? 1 : 0.5,
+                                    cursor: (points.length > 0 && prompt && isEncoded && !isLoading) ? "pointer" : "not-allowed"
                                 }}
                             >
-                                Regenerate with AI
+                                {isLoading ? (
+                                    <>
+                                        <div className="w-5 h-5 mr-2 border-2 border-foreground border-t-transparent rounded-full animate-spin inline-block" />
+                                        Regenerating...
+                                    </>
+                                ) : (
+                                    'Regenerate with AI'
+                                )}
                             </button>
                         </div>
                     </div>
@@ -482,6 +502,7 @@ function FrameWithPanels() {
     const [selectedPanel, setSelectedPanel] = useState<number | null>(null);
     const [isResizing, setIsResizing] = useState(false);
     const [popupImage, setPopupImage] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(false); // Add this
     const containerRef = React.useRef<HTMLDivElement>(null);
 
     // Load data from sessionStorage on mount
@@ -595,30 +616,66 @@ function FrameWithPanels() {
     };
 
     const handleRegenerate = async (originalImage: string, maskImage: string, prompt: string) => {
+        if (selectedPanel === null) {
+            alert('No panel selected');
+            return;
+        }
+        
         try {
-            // Call your image generation API
-            const response = await fetch('/api/regenerate-panel', {
+            setIsLoading(true);
+            
+            // Convert data URLs to Files
+            const originalBlob = await fetch(originalImage).then(r => r.blob());
+            const maskBlob = await fetch(maskImage).then(r => r.blob());
+            
+            const originalFile = new File([originalBlob], 'original.png', { type: 'image/png' });
+            const maskFile = new File([maskBlob], 'mask.png', { type: 'image/png' });
+            
+            // Create FormData
+            const formData = new FormData();
+            formData.append('original_image', originalFile);
+            formData.append('mask_image', maskFile);
+            formData.append('prompt', prompt);
+            formData.append('panel_index', selectedPanel.toString());
+            formData.append('style', storyboardData?.style || 'shonen');
+            
+            // Send to backend
+            const response = await fetch('http://127.0.0.1:8000/api/regenerate-panel', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    originalImage,
-                    maskImage,
-                    prompt,
-                    panelIndex: selectedPanel,
-                }),
+                body: formData,
             });
 
-            const data = await response.json();
-            
-            if (data.success) {
-                // Update the panel with the new image
-                // You'll need to implement this based on your state management
-                alert('Panel regenerated successfully!');
-                setShowSegmentPopup(false);
+            if (response.ok) {
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    // Update the panel with the new image
+                    setStoryboardData(prev => {
+                        if (!prev) return prev;
+                        const updatedPanels = [...prev.panels];
+                        updatedPanels[selectedPanel] = data.new_panel_url;
+                        return {
+                            ...prev,
+                            panels: updatedPanels
+                        };
+                    });
+                    
+                    alert('Panel regenerated successfully!');
+                    setShowSegmentPopup(false);
+                } else {
+                    console.error('Backend error:', data.error || data.message);
+                    alert(`Error: ${data.error || data.message || 'Failed to regenerate panel'}`);
+                }
+            } else {
+                const errorData = await response.json().catch(() => ({}));
+                console.error('Request failed:', response.status, errorData.message || response.statusText);
+                alert(`Error: ${errorData.message || response.statusText || 'Failed to connect to server'}`);
             }
         } catch (error) {
             console.error('Error regenerating panel:', error);
-            alert('Failed to regenerate panel');
+            alert('Failed to regenerate panel. Please try again.');
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -858,6 +915,7 @@ function FrameWithPanels() {
                     imageSrc={segmentImageSrc}
                     onClose={() => setShowSegmentPopup(false)}
                     onRegenerate={handleRegenerate}
+                    isLoading={isLoading} // Pass the loading state
                 />
             )}
         </div>
