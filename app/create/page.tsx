@@ -22,6 +22,7 @@ export default function CreatePage() {
   const [uploadedImages, setUploadedImages] = useState<string[]>([])
   const [illustrationImages, setIllustrationImages] = useState<string[]>([])
   const [characterImages, setCharacterImages] = useState<string[]>([])
+  const [characterNames, setCharacterNames] = useState<string[]>([])
   const [errors, setErrors] = useState({
     prompt: "",
     panels: "",
@@ -51,6 +52,7 @@ export default function CreatePage() {
     if (files) {
       const newImages = Array.from(files).map((file) => URL.createObjectURL(file))
       setCharacterImages((prev) => [...prev, ...newImages])
+      setCharacterNames((prev) => [...prev, ...Array(files.length).fill("")])
     }
   }
 
@@ -64,6 +66,15 @@ export default function CreatePage() {
 
   const removeCharacterImage = (index: number) => {
     setCharacterImages((prev) => prev.filter((_, i) => i !== index))
+    setCharacterNames((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const handleCharacterNameChange = (index: number, name: string) => {
+    setCharacterNames((prev) => {
+      const updated = [...prev]
+      updated[index] = name
+      return updated
+    })
   }
 
   const handleCreate = async () => {
@@ -82,10 +93,6 @@ export default function CreatePage() {
       newErrors.panels = "Please enter a valid number of panels (1-12)"
     }
 
-    if (uploadedImages.length === 0) {
-      newErrors.images = "Please upload at least one reference image"
-    }
-
     setErrors(newErrors)
 
     // Check if there are any errors
@@ -96,12 +103,21 @@ export default function CreatePage() {
     setIsLoading(true)
 
     try {
-      // Convert uploaded images to File objects
-      const imageFiles = await Promise.all(
-        uploadedImages.map(async (imageUrl, index) => {
+      // Convert illustration images to File objects
+      const illustrationFiles = await Promise.all(
+        illustrationImages.map(async (imageUrl, index) => {
           const response = await fetch(imageUrl)
           const blob = await response.blob()
-          return new File([blob], `image-${index}.png`, { type: blob.type })
+          return new File([blob], `illustration-${index}.png`, { type: blob.type })
+        })
+      )
+
+      // Convert character images to File objects
+      const characterFiles = await Promise.all(
+        characterImages.map(async (imageUrl, index) => {
+          const response = await fetch(imageUrl)
+          const blob = await response.blob()
+          return new File([blob], `character-${index}.png`, { type: blob.type })
         })
       )
 
@@ -111,9 +127,19 @@ export default function CreatePage() {
       formData.append("panels", panels)
       formData.append("style", style)
 
-      // Append images
-      imageFiles.forEach((file) => {
-        formData.append("images", file)
+      // Append illustration images
+      illustrationFiles.forEach((file) => {
+        formData.append("illustration_images", file)
+      })
+
+      // Append character images
+      characterFiles.forEach((file) => {
+        formData.append("character_images", file)
+      })
+
+      // Append character names
+      characterNames.forEach((name) => {
+        formData.append("character_names", name)
       })
 
       // Send to backend
@@ -364,6 +390,8 @@ export default function CreatePage() {
                           <Input
                             type="text"
                             placeholder={`Character ${index + 1} Name`}
+                            value={characterNames[index] || ""}
+                            onChange={(e) => handleCharacterNameChange(index, e.target.value)}
                             className="bg-input border-2 border-border focus:border-primary text-foreground"
                           />
                           <button
