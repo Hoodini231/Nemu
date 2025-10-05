@@ -16,7 +16,7 @@ import { ArrowLeft, Upload, X, Sparkles } from "lucide-react"
 
 export default function CreatePage() {
   const router = useRouter()
-  const [prompt, setPrompt] = useState("woof")
+  const [prompt, setPrompt] = useState("")
   const [panels, setPanels] = useState("4")
   const [style, setStyle] = useState("shonen")
   const [illustrationImages, setIllustrationImages] = useState<string[]>([])

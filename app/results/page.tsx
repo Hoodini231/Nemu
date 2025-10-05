@@ -1,8 +1,7 @@
 "use client"
 import Link from "next/link"
-import { Button } from "../../components/ui/button"
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../components/ui/card"
-import { ArrowLeft, RefreshCw, Edit, Sparkles } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
+import { ArrowLeft } from "lucide-react"
 import React, { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
@@ -18,21 +17,19 @@ interface DraggablePanelProps {
     isSelected: boolean;
     handleDragStart: (index: number, event: React.MouseEvent<HTMLDivElement>) => void;
     handleSelect: (index: number) => void;
+    handleResize: (index: number, event: React.MouseEvent<HTMLDivElement>, direction: string) => void;
 }
 
-const DraggablePanel: React.FC<DraggablePanelProps> = ({ 
-    x, y, width, height, imageSrc, alt, index, isSelected, 
-    handleDragStart, handleSelect 
+const DraggablePanel: React.FC<DraggablePanelProps> = ({
+    x, y, width, height, imageSrc, alt, index, isSelected,
+    handleDragStart, handleSelect, handleResize
 }) => {
-    
-    // Determine border style based on selection
     const borderStyle = isSelected
-        ? "4px solid #F06292" // Highlight color (e.g., pink/magenta)
-        : "1px solid #777";   // Default border color
+        ? "4px solid #F06292"
+        : "1px solid #777";
 
     return (
         <div
-            key={index}
             style={{
                 position: "absolute",
                 left: `${x}px`,
@@ -42,30 +39,39 @@ const DraggablePanel: React.FC<DraggablePanelProps> = ({
                 overflow: "hidden",
                 cursor: "grab",
                 border: borderStyle,
-                transition: "border-color 0.2s ease-in-out", // Smooth highlight transition
-                // Prevent image right-click/selection
-                WebkitUserSelect: 'none',
-                MozUserSelect: 'none',
-                msUserSelect: 'none',
-                userSelect: 'none',
+                transition: "border-color 0.2s ease-in-out",
+                userSelect: "none",
             }}
-            // OnMouseDown handles both drag start AND selection
             onMouseDown={(event) => {
-                handleSelect(index);
                 handleDragStart(index, event);
+            }}
+            onClick={(e) => {
+                e.stopPropagation();
+                handleSelect(index);
             }}
         >
             <img
                 src={imageSrc}
                 alt={alt}
-                draggable="false" // Prevent native image dragging
+                draggable="false"
                 style={{
                     width: "100%",
                     height: "100%",
                     objectFit: "cover",
-                    // Additional lock: ensures image doesn't steal pointer events from the parent div
-                    pointerEvents: 'none', 
+                    pointerEvents: "none",
                 }}
+            />
+            <div
+                style={{
+                    position: "absolute",
+                    bottom: 0,
+                    right: 0,
+                    width: "10px",
+                    height: "10px",
+                    backgroundColor: "var(--foreground-color)",
+                    cursor: "nwse-resize",
+                }}
+                onMouseDown={(event) => handleResize(index, event, "bottom-right")}
             />
         </div>
     );
@@ -74,9 +80,9 @@ const DraggablePanel: React.FC<DraggablePanelProps> = ({
 
 
 interface StoryboardData {
-    panels: string[];  // Base64 encoded panel images
-    coordinates: number[][];  // Panel positions [x, y, width, height]
-    total_size: number[];  // Original image dimensions [width, height]
+    panels: string[];
+    coordinates: number[][];
+    total_size: number[];
     panel_count: number;
     n8n_data?: any;
     original_prompt?: string;
@@ -87,8 +93,12 @@ interface StoryboardData {
 function FrameWithPanels() {
     const router = useRouter();
     const [storyboardData, setStoryboardData] = useState<StoryboardData | null>(null);
+    const [initialPositions, setInitialPositions] = useState<number[][]>([]);
     const [positions, setPositions] = useState<number[][]>([]);
     const [selectedPanel, setSelectedPanel] = useState<number | null>(null);
+    const [isResizing, setIsResizing] = useState(false);
+    const [popupImage, setPopupImage] = useState<string | null>(null);
+    const containerRef = React.useRef<HTMLDivElement>(null);
 
     // Load data from sessionStorage on mount
     useEffect(() => {
@@ -96,9 +106,9 @@ function FrameWithPanels() {
         if (storedData) {
             try {
                 const data: StoryboardData = JSON.parse(storedData);
-                console.log("📦 Loaded storyboard data:", data);
+                console.log("📦 Loaded storyboard data");
                 setStoryboardData(data);
-                // Initialize positions from coordinates
+                setInitialPositions(data.coordinates);
                 setPositions(data.coordinates);
             } catch (error) {
                 console.error("Failed to parse storyboard data:", error);
@@ -110,55 +120,95 @@ function FrameWithPanels() {
         }
     }, [router]);
 
-    // Handler to set the selected panel
-    const handleSelect = (index: number) => {
-        setSelectedPanel(index);
+    const handleResetLayout = () => {
+        setPositions(initialPositions);
+        setSelectedPanel(null);
     };
 
-    // Corrected Drag Handler using the global window listener pattern and functional state updates
-    const handleDragStart = useCallback((index: number, event: React.MouseEvent<HTMLDivElement>) => {
+    const handleSelect = (index: number) => {
+        setSelectedPanel(selectedPanel === index ? null : index);
+    };
+
+    const handleDragStart = (index: number, event: React.MouseEvent<HTMLDivElement>) => {
+        if (isResizing) return;
         event.stopPropagation();
 
-        // 1. Calculate the offset (distance from mouse click to panel's top-left corner)
+        const container = containerRef.current;
+        if (!container) return;
+
         const rect = event.currentTarget.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
         const offsetX = event.clientX - rect.left;
         const offsetY = event.clientY - rect.top;
 
-        // 2. Define the mouse move logic
         const onMouseMove = (moveEvent: MouseEvent) => {
-            // Calculate new X and Y using the current mouse position minus the initial offset
-            // We do not need to subtract large fixed numbers (like 650, 200) unless
-            // the parent container has a non-zero, non-relative position, which
-            // is not the case for the FrameWithPanels div (relative position).
-            const newX = moveEvent.clientX - offsetX - 650;
-            const newY = moveEvent.clientY - offsetY - 70;
+            const currentContainerRect = container.getBoundingClientRect();
+            const newX = moveEvent.clientX - currentContainerRect.left - offsetX;
+            const newY = moveEvent.clientY - currentContainerRect.top - offsetY;
 
-            // Use the functional state update to ensure we use the very latest position state
             setPositions(prevPositions => {
                 const updatedPositions = [...prevPositions];
-                // Update only the x and y (indices 0 and 1)
                 updatedPositions[index] = [newX, newY, updatedPositions[index][2], updatedPositions[index][3]];
                 return updatedPositions;
             });
         };
 
-        // 3. Define the mouse up logic (for cleanup)
         const onMouseUp = () => {
             window.removeEventListener("mousemove", onMouseMove);
             window.removeEventListener("mouseup", onMouseUp);
         };
 
-        // 4. Attach global listeners to start the drag
         window.addEventListener("mousemove", onMouseMove);
         window.addEventListener("mouseup", onMouseUp);
+    };
 
-        // Prevent the browser from trying to select text/image while dragging
-        // This is a browser default that needs to be prevented for smooth dragging
-        return () => {
+    const handleResize = (index: number, event: React.MouseEvent<HTMLDivElement>, direction: string) => {
+        event.stopPropagation();
+        setIsResizing(true);
+
+        const container = containerRef.current;
+        if (!container) return;
+
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const startWidth = positions[index][2];
+        const startHeight = positions[index][3];
+
+        const onMouseMove = (moveEvent: MouseEvent) => {
+            const deltaX = moveEvent.clientX - startX;
+            const deltaY = moveEvent.clientY - startY;
+
+            setPositions(prevPositions => {
+                const updatedPositions = [...prevPositions];
+                if (direction === "bottom-right") {
+                    updatedPositions[index] = [
+                        updatedPositions[index][0],
+                        updatedPositions[index][1],
+                        Math.max(50, startWidth + deltaX),
+                        Math.max(50, startHeight + deltaY),
+                    ];
+                }
+                return updatedPositions;
+            });
+        };
+
+        const onMouseUp = () => {
+            setIsResizing(false);
             window.removeEventListener("mousemove", onMouseMove);
             window.removeEventListener("mouseup", onMouseUp);
         };
-    }, []); // Empty dependency array, as the logic relies on event and state setter
+
+        window.addEventListener("mousemove", onMouseMove);
+        window.addEventListener("mouseup", onMouseUp);
+    };
+
+    const handleSegmentLayersClick = (imageSrc: string) => {
+        setPopupImage(imageSrc);
+    };
+
+    const closePopup = () => {
+        setPopupImage(null);
+    };
 
     // Show loading state while data is loading
     if (!storyboardData) {
@@ -170,55 +220,228 @@ function FrameWithPanels() {
     }
 
     return (
-        <div
-            style={{
-                position: "relative",
-                width: `${storyboardData.total_size[0]}px`,
-                height: `${storyboardData.total_size[1]}px`,
-                border: "2px solid black",
-                margin: "0 auto",
-            }}
-            // Clicking anywhere outside a panel should deselect the current panel
-            onClick={() => setSelectedPanel(null)}
-        >
-            {positions.map(([x, y, width, height], index) => (
-                <DraggablePanel
-                    key={index}
-                    index={index}
-                    x={x}
-                    y={y}
-                    width={width}
-                    height={height}
-                    imageSrc={storyboardData.panels[index]}
-                    alt={`Panel ${index + 1}`}
-                    isSelected={selectedPanel === index}
-                    handleSelect={handleSelect}
-                    handleDragStart={handleDragStart}
-                />
-            ))}
+        <div style={{ display: "flex", justifyContent: "center", gap: "20px" }}>
+            <Card className="max-w-6xl bg-white/95 backdrop-blur-sm border-4 border-foreground shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1" style={{
+                backgroundImage: "linear-gradient(to right, #e0e0e0 1px, transparent 1px), linear-gradient(to bottom, #e0e0e0 1px, transparent 1px)",
+                backgroundSize: "20px 20px",
+                width: `${storyboardData.total_size[0] * 1.1}px`,
+                height: `${storyboardData.total_size[1] * 1.1}px`,
+            }}>
+                <CardHeader>
+                </CardHeader>
+                <CardContent>
+                    <div
+                        ref={containerRef}
+                        style={{
+                            position: "relative",
+                            width: "100%",
+                            height: "100%",
+                        }}
+                        onClick={() => setSelectedPanel(null)}
+                    >
+                        {positions.map(([x, y, width, height], index) => (
+                            <DraggablePanel
+                                key={index}
+                                index={index}
+                                x={x}
+                                y={y}
+                                width={width}
+                                height={height}
+                                imageSrc={storyboardData.panels[index]}
+                                alt={`Panel ${index + 1}`}
+                                isSelected={selectedPanel === index}
+                                handleSelect={handleSelect}
+                                handleDragStart={handleDragStart}
+                                handleResize={handleResize}
+                            />
+                        ))}
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card className="max-w-sm bg-white/95 backdrop-blur-sm border-4 border-foreground shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1" style={{
+                width: "500px",
+                height: "450px",
+                padding: "20px",
+                overflowY: "auto",
+            }}>
+                <CardHeader className="relative">
+                    <div className="absolute inset-0 items-center justify-center w-70 h-10 -rotate-5">
+                        <img
+                            src="/highlight_orange.png"
+                            alt="Background"
+                            className="w-full h-full object-cover pointer-events-none"
+                        />
+                    </div>
+                    <CardTitle className="text-2xl font-black text-foreground relative">
+                        {selectedPanel !== null ? `Panel ${selectedPanel + 1} Info` : "Overall Info"}
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {selectedPanel !== null ? (
+                        <div className="space-y-4 tp-24">
+                            <div className="grid flex gap-4 mt-20">
+                                <button
+                                    className="washi-tape-pink w-60 backdrop-blur-sm border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1"
+                                    style={{
+                                        padding: "10px 20px",
+                                        borderRadius: "5px",
+                                        cursor: "pointer",
+                                    }}
+                                    onClick={() => handleSegmentLayersClick(storyboardData.panels[selectedPanel])}
+                                >
+                                    Regenerate this panel
+                                </button>
+                                <button
+                                    className="washi-tape-blue w-60 backdrop-blur-sm border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1"
+                                    style={{
+                                        padding: "10px 20px",
+                                        borderRadius: "5px",
+                                        cursor: "pointer",
+                                    }}
+                                    onClick={() => {
+                                        const link = document.createElement('a');
+                                        link.href = storyboardData.panels[selectedPanel];
+                                        link.download = `panel-${selectedPanel + 1}.png`;
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                    }}
+                                >
+                                    Save My File
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div>
+                            <p style={{ fontSize: "14px", color: "#555" }}>Select a panel to see details and actions.</p>
+                            <div className="flex gap-2 mt-35">
+                                <button
+                                    className="washi-tape-mint w-30 backdrop-blur-sm border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1"
+                                    style={{
+                                        padding: "10px 20px",
+                                        borderRadius: "5px",
+                                        cursor: "pointer",
+                                    }}
+                                    onClick={() => handleResetLayout()}
+                                >
+                                    Reset Layout
+                                </button>
+                                <button
+                                    className="washi-tape-pink w-30 backdrop-blur-sm border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1"
+                                    style={{
+                                        padding: "10px 20px",
+                                        borderRadius: "5px",
+                                        cursor: "pointer",
+                                    }}
+                                    onClick={() => {
+                                        // Download all panels as PNG
+                                        const link = document.createElement('a');
+                                        link.href = storyboardData.panels[0];
+                                        link.download = 'storyboard.png';
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                    }}
+                                >
+                                    Save Original PNG
+                                </button>
+                                <button
+                                    className="washi-tape-blue w-30 backdrop-blur-sm border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1"
+                                    style={{
+                                        padding: "10px 20px",
+                                        borderRadius: "5px",
+                                        cursor: "pointer",
+                                    }}
+                                    onClick={() => {
+                                        // PSD export placeholder
+                                        alert("PSD export coming soon!");
+                                    }}
+                                >
+                                    Save Original PSD
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {popupImage && (
+                <div
+                    style={{
+                        position: "fixed",
+                        top: 0,
+                        left: 0,
+                        width: "100vw",
+                        height: "100vh",
+                        backgroundColor: "rgba(0, 0, 0, 0.5)",
+                        display: "flex",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        zIndex: 1000,
+                    }}
+                    onClick={closePopup}
+                >
+                    <Card
+                        className="bg-white/95 backdrop-blur-sm border-4 border-foreground shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform"
+                        style={{
+                            width: "80vw",
+                            height: "80vh",
+                            display: "flex",
+                            flexDirection: "row",
+                            overflow: "hidden",
+                        }}
+                        onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside the popup
+                    >
+                        <div style={{ flex: 2, display: "flex", justifyContent: "center", alignItems: "center" }}>
+                            <img
+                                src={popupImage}
+                                alt="Panel Popup"
+                                style={{
+                                    maxWidth: "100%",
+                                    maxHeight: "100%",
+                                    objectFit: "contain",
+                                }}
+                            />
+                        </div>
+                        <div
+                            style={{
+                                flex: 1,
+                                backgroundColor: "#f9f9f9",
+                                padding: "20px",
+                                overflowY: "auto",
+                                borderLeft: "2px solid var(--foreground-color)",
+                            }}
+                        >
+                            <h2 style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "10px" }}>{"Information"}</h2>
+                            <p style={{ fontSize: "14px", color: "#555" }}>Details about the selected panel can go here.</p>
+                            {/* Add more information or controls here */}
+                        </div>
+                        <button
+                            style={{
+                                position: "absolute",
+                                top: "10px",
+                                right: "10px",
+                                backgroundColor: "red",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "5px",
+                                padding: "5px 10px",
+                                cursor: "pointer",
+                            }}
+                            onClick={closePopup}
+                        >
+                            Close
+                        </button>
+                    </Card>
+                </div>
+            )}
         </div>
     );
 }
 
 // --- ResultsPage (Main Component) ---
 export default function ResultsPage() {
-    // ... (omitted static data for brevity)
-
-    const getCardClass = (theme: string) => {
-        const themeMap: Record<string, string> = {
-            blue: "card-tinted-blue", peach: "card-tinted-peach", pink: "card-tinted-pink",
-            lavender: "card-tinted-lavender", mint: "card-tinted-mint", yellow: "card-tinted-yellow",
-        }
-        return themeMap[theme] || ""
-    }
-
-    const getWashiColor = (theme: string) => {
-        const colorMap: Record<string, string> = {
-            blue: "#C6DEF1", peach: "#F7D9C4", pink: "#F2C6DE",
-            lavender: "#DBCDF0", mint: "#C9E4DE", yellow: "#FAEDCB",
-        }
-        return colorMap[theme] || "#C9E4DE"
-    }
 
     return (
         <div className="min-h-screen relative overflow-hidden">
@@ -250,6 +473,7 @@ export default function ResultsPage() {
                         <div className="inline-block mb-2">
                             <div className="washi-tape washi-tape-lavender text-sm font-medium text-foreground w-30">✨ Generated</div>
                         </div>
+
                         <CardTitle className="text-3xl md:text-4xl font-bold text-foreground">Your Storyboard Creation</CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -258,16 +482,9 @@ export default function ResultsPage() {
                         </p>
                     </CardContent>
                 </Card>
-
-                {/* Panels Grid */}
-                <Card className="max-w-6xl mx-auto mb-8 bg-white/95 backdrop-blur-sm border-4 border-foreground shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1">
-                    <CardHeader>
-                    </CardHeader>
-                    <CardContent>
-                        <FrameWithPanels />
-                    </CardContent>
-                </Card>
+                <FrameWithPanels />
             </div>
         </div>
     )
 }
+
