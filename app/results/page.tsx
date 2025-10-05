@@ -251,17 +251,19 @@ const SegmentationPopup: React.FC<SegmentationPopupProps> = ({
 
     // Add the handleImageClick function
     const handleImageClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (!isEncoded || !imageContainerRef.current) return;
-        
-        const bb = imageContainerRef.current.getBoundingClientRect();
-        const mouseX = Math.max(0, Math.min(1, (e.clientX - bb.left) / bb.width));
-        const mouseY = Math.max(0, Math.min(1, (e.clientY - bb.top) / bb.height));
-        
+        if (!isEncoded || !imageRef.current) return;
+        const img = imageRef.current;
+        const rect = img.getBoundingClientRect();
+        // Clamp mouse to image area
+        const mouseX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+        const mouseY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+        // Map to normalized coordinates (0..1)
+        const normX = mouseX / rect.width;
+        const normY = mouseY / rect.height;
         const newPoint: Point = {
-            point: [mouseX, mouseY],
+            point: [normX, normY],
             label: e.button === 2 ? 0 : 1
         };
-        
         setPoints(prev => [...prev, newPoint]);
     };
 
