@@ -3,7 +3,8 @@ import Link from "next/link"
 import { Button } from "../../components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../components/ui/card"
 import { ArrowLeft, RefreshCw, Edit, Sparkles } from "lucide-react"
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
+import { segmentWorkerCode } from '../../lib/segment-worker-code';
 
 // --- Sub-Component for Draggable Panel ---
 interface DraggablePanelProps {
@@ -81,6 +82,387 @@ const DraggablePanel: React.FC<DraggablePanelProps> = ({
 
 // ------------------------------------------
 
+interface Point {
+    point: [number, number];
+    label: number;
+}
+
+interface SegmentationPopupProps {
+    imageSrc: string;
+    onClose: () => void;
+    onRegenerate: (originalImage: string, maskImage: string, prompt: string) => void;
+}
+
+const SegmentationPopup: React.FC<SegmentationPopupProps> = ({ imageSrc, onClose, onRegenerate }) => {
+    const [points, setPoints] = useState<Point[]>([]);
+    const [isEncoded, setIsEncoded] = useState(false);
+    const [isDecoding, setIsDecoding] = useState(false);
+    const [modelReady, setModelReady] = useState(false);
+    const [status, setStatus] = useState('Initializing...');
+    const [loadingProgress, setLoadingProgress] = useState(0);
+    const [loadingDetails, setLoadingDetails] = useState('');
+    const [prompt, setPrompt] = useState('');
+    
+    const workerRef = useRef<Worker | null>(null);
+    const maskCanvasRef = useRef<HTMLCanvasElement>(null);
+    const imageContainerRef = useRef<HTMLDivElement>(null);
+    const imageRef = useRef<HTMLImageElement>(null);
+
+    // Initialize worker
+    useEffect(() => {
+        console.log('Initializing worker with image:', imageSrc);
+        
+        try {
+            // Create worker from blob
+            const blob = new Blob([segmentWorkerCode], { type: 'application/javascript' });
+            const workerUrl = URL.createObjectURL(blob);
+            workerRef.current = new Worker(workerUrl, { type: 'module' });
+            
+            workerRef.current.addEventListener('message', (e) => {
+                console.log('Worker message received:', e.data);
+                const { type, data } = e.data;
+                
+                if (type === 'debug') {
+                    console.log('[Worker Debug]:', data);
+                } else if (type === 'loading_progress') {
+                    console.log('Loading progress:', data);
+                    setStatus(data.status);
+                    setLoadingProgress(data.progress);
+                    if (data.file) {
+                        const fileSizeMB = ((data.loaded || 0) / 1024 / 1024).toFixed(2);
+                        const totalSizeMB = ((data.total || 0) / 1024 / 1024).toFixed(2);
+                        setLoadingDetails(`${data.file}: ${fileSizeMB}MB / ${totalSizeMB}MB`);
+                    }
+                } else if (type === 'ready') {
+                    console.log('Worker is ready!');
+                    setModelReady(true);
+                    setLoadingProgress(100);
+                    setStatus('Ready - Click to add points (left: include, right: exclude)');
+                    setLoadingDetails('Model loaded successfully');
+                    
+                    // Start segmentation
+                    console.log('Sending segment request for image:', imageSrc);
+                    setTimeout(() => {
+                        workerRef.current?.postMessage({ type: 'segment', data: imageSrc });
+                    }, 500);
+                } else if (type === 'decode_result') {
+                    console.log('Decode result received');
+                    setIsDecoding(false);
+                    const { mask, scores } = data;
+                    
+                    if (maskCanvasRef.current && mask && scores) {
+                        const canvas = maskCanvasRef.current;
+                        canvas.width = mask.width;
+                        canvas.height = mask.height;
+                        
+                        const context = canvas.getContext('2d');
+                        if (!context) {
+                            console.error('Failed to get canvas context');
+                            return;
+                        }
+                        
+                        const imageData = context.createImageData(canvas.width, canvas.height);
+                        
+                        // Select best mask
+                        const numMasks = scores.length;
+                        let bestIndex = 0;
+                        for (let i = 1; i < numMasks; i++) {
+                            if (scores[i] > scores[bestIndex]) {
+                                bestIndex = i;
+                            }
+                        }
+                        
+                        console.log(`Using mask ${bestIndex} with score ${scores[bestIndex]}`);
+                        setStatus(`Segment score: ${scores[bestIndex].toFixed(2)}`);
+                        
+                        // Fill mask with semi-transparent blue
+                        const pixelData = imageData.data;
+                        for (let i = 0; i < mask.data.length / numMasks; i++) {
+                            if (mask.data[numMasks * i + bestIndex] === 1) {
+                                const offset = 4 * i;
+                                pixelData[offset] = 0;        // R
+                                pixelData[offset + 1] = 114;  // G
+                                pixelData[offset + 2] = 189;  // B
+                                pixelData[offset + 3] = 180;  // A
+                            }
+                        }
+                        
+                        context.putImageData(imageData, 0, 0);
+                    }
+                } else if (type === 'segment_result') {
+                    console.log('Segment result:', data);
+                    if (data === 'start') {
+                        setStatus('Extracting image embedding...');
+                    } else if (data === 'done') {
+                        setStatus('Ready - Click to add points');
+                        setIsEncoded(true);
+                        console.log('Image encoding complete');
+                    }
+                } else if (type === 'error') {
+                    console.error('Worker error:', data);
+                    setStatus(`Error: ${data.message}`);
+                    setLoadingDetails(data.stack || '');
+                }
+            });
+
+            workerRef.current.addEventListener('error', (error) => {
+                const errorMsg = `Worker error: ${error.message || 'Unknown error'}`;
+                setStatus(errorMsg);
+                console.error('Worker error event:', error);
+            });
+
+            // IMPORTANT: Send initial message to trigger worker
+            console.log('Sending initial message to trigger worker...');
+            setTimeout(() => {
+                console.log('Sending init message now');
+                workerRef.current?.postMessage({ type: 'init' });
+            }, 100);
+
+            return () => {
+                console.log('Cleaning up worker');
+                workerRef.current?.terminate();
+                URL.revokeObjectURL(workerUrl);
+            };
+        } catch (error: any) {
+            setStatus(`Failed to create worker: ${error.message}`);
+            console.error('Worker creation error:', error);
+        }
+    }, [imageSrc]);
+
+    // Add the decode function
+    const decode = useCallback(() => {
+        if (points.length > 0 && !isDecoding) {
+            setIsDecoding(true);
+            workerRef.current?.postMessage({ type: 'decode', data: points });
+        }
+    }, [points, isDecoding]);
+
+    // Trigger decode when points change and image is encoded
+    useEffect(() => {
+        if (isEncoded && points.length > 0) {
+            decode();
+        }
+    }, [points, isEncoded, decode]);
+
+    // Add the handleImageClick function
+    const handleImageClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (!isEncoded || !imageContainerRef.current) return;
+        
+        const bb = imageContainerRef.current.getBoundingClientRect();
+        const mouseX = Math.max(0, Math.min(1, (e.clientX - bb.left) / bb.width));
+        const mouseY = Math.max(0, Math.min(1, (e.clientY - bb.top) / bb.height));
+        
+        const newPoint: Point = {
+            point: [mouseX, mouseY],
+            label: e.button === 2 ? 0 : 1
+        };
+        
+        setPoints(prev => [...prev, newPoint]);
+    };
+
+    // Add the handleClearPoints function
+    const handleClearPoints = () => {
+        setPoints([]);
+        if (maskCanvasRef.current) {
+            const context = maskCanvasRef.current.getContext('2d');
+            context?.clearRect(0, 0, maskCanvasRef.current.width, maskCanvasRef.current.height);
+        }
+    };
+
+    // Add the handleRegenerate function
+    const handleRegenerateClick = async () => {
+        if (!maskCanvasRef.current || !imageRef.current) return;
+        
+        // Get mask as data URL
+        const maskDataURL = maskCanvasRef.current.toDataURL('image/png');
+        
+        // Call the regeneration callback
+        onRegenerate(imageSrc, maskDataURL, prompt);
+    };
+
+    return (
+        <div
+            style={{
+                position: "fixed",
+                top: 0,
+                left: 0,
+                width: "100vw",
+                height: "100vh",
+                backgroundColor: "rgba(0, 0, 0, 0.5)",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                zIndex: 1000,
+            }}
+            onClick={onClose}
+        >
+            <Card
+                className="bg-white/95 backdrop-blur-sm border-4 border-foreground shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]"
+                style={{
+                    width: "90vw",
+                    height: "90vh",
+                    display: "flex",
+                    flexDirection: "column",
+                    overflow: "hidden",
+                }}
+                onClick={(e) => e.stopPropagation()}
+            >
+                <CardHeader>
+                    <CardTitle>Segment & Regenerate Panel</CardTitle>
+                    <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">{status}</p>
+                        {!isEncoded && (
+                            <>
+                                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                    <div 
+                                        className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" 
+                                        style={{ width: `${loadingProgress}%` }}
+                                    />
+                                </div>
+                                {loadingDetails && (
+                                    <p className="text-xs text-muted-foreground">{loadingDetails}</p>
+                                )}
+                            </>
+                        )}
+                    </div>
+                </CardHeader>
+                
+                <CardContent style={{ flex: 1, display: "flex", gap: "20px", overflow: "hidden" }}>
+                    <div
+                        ref={imageContainerRef}
+                        style={{
+                            flex: 2,
+                            position: "relative",
+                            overflow: "hidden",
+                            cursor: isEncoded ? "crosshair" : "wait",
+                            opacity: isEncoded ? 1 : 0.5,
+                        }}
+                        onMouseDown={isEncoded ? handleImageClick : undefined}
+                        onContextMenu={(e) => e.preventDefault()}
+                    >
+                        <img
+                            ref={imageRef}
+                            src={imageSrc}
+                            alt="Panel"
+                            style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "contain",
+                            }}
+                        />
+                        {!isEncoded && (
+                            <div
+                                style={{
+                                    position: "absolute",
+                                    top: "50%",
+                                    left: "50%",
+                                    transform: "translate(-50%, -50%)",
+                                    backgroundColor: "rgba(255, 255, 255, 0.9)",
+                                    padding: "20px",
+                                    borderRadius: "10px",
+                                    textAlign: "center",
+                                }}
+                            >
+                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4" />
+                                <p className="font-semibold">{status}</p>
+                            </div>
+                        )}
+                        <canvas
+                            ref={maskCanvasRef}
+                            style={{
+                                position: "absolute",
+                                top: 0,
+                                left: 0,
+                                width: "100%",
+                                height: "100%",
+                                pointerEvents: "none",
+                            }}
+                        />
+                        {points.map((point, idx) => (
+                            <div
+                                key={idx}
+                                style={{
+                                    position: "absolute",
+                                    left: `${point.point[0] * 100}%`,
+                                    top: `${point.point[1] * 100}%`,
+                                    width: "10px",
+                                    height: "10px",
+                                    borderRadius: "50%",
+                                    backgroundColor: point.label === 1 ? "#00ff00" : "#ff0000",
+                                    transform: "translate(-50%, -50%)",
+                                    pointerEvents: "none",
+                                }}
+                            />
+                        ))}
+                    </div>
+                    
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "10px", padding: "20px" }}>
+                        <h3 className="text-lg font-bold">Instructions</h3>
+                        <p className="text-sm">• Left click to include areas</p>
+                        <p className="text-sm">• Right click to exclude areas</p>
+                        
+                        <div style={{ marginTop: "20px" }}>
+                            <label className="block text-sm font-medium mb-2">Edit Prompt:</label>
+                            <textarea
+                                value={prompt}
+                                onChange={(e) => setPrompt(e.target.value)}
+                                placeholder="Describe how you want to edit the selected area..."
+                                className="w-full p-2 border-2 border-foreground rounded"
+                                rows={4}
+                            />
+                        </div>
+                        
+                        <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: "10px" }}>
+                            <button
+                                onClick={handleClearPoints}
+                                disabled={!isEncoded}
+                                className="washi-tape-mint w-full backdrop-blur-sm border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300"
+                                style={{ 
+                                    padding: "10px", 
+                                    borderRadius: "5px",
+                                    opacity: isEncoded ? 1 : 0.5,
+                                    cursor: isEncoded ? "pointer" : "not-allowed"
+                                }}
+                            >
+                                Clear Points
+                            </button>
+                            <button
+                                onClick={handleRegenerateClick}
+                                disabled={points.length === 0 || !prompt || !isEncoded}
+                                className="washi-tape-pink w-full backdrop-blur-sm border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300"
+                                style={{ 
+                                    padding: "10px", 
+                                    borderRadius: "5px",
+                                    opacity: (points.length > 0 && prompt && isEncoded) ? 1 : 0.5,
+                                    cursor: (points.length > 0 && prompt && isEncoded) ? "pointer" : "not-allowed"
+                                }}
+                            >
+                                Regenerate with AI
+                            </button>
+                        </div>
+                    </div>
+                </CardContent>
+                
+                <button
+                    onClick={onClose}
+                    style={{
+                        position: "absolute",
+                        top: "10px",
+                        right: "10px",
+                        backgroundColor: "red",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "5px",
+                        padding: "5px 10px",
+                        cursor: "pointer",
+                    }}
+                >
+                    Close
+                </button>
+            </Card>
+        </div>
+    );
+};
 
 function FrameWithPanels() {
     // [x, y, width, height]
@@ -182,8 +564,40 @@ function FrameWithPanels() {
         window.addEventListener("mouseup", onMouseUp);
     };
 
+    const [showSegmentPopup, setShowSegmentPopup] = useState(false);
+    const [segmentImageSrc, setSegmentImageSrc] = useState<string>("");
+
     const handleSegmentLayersClick = (imageSrc: string) => {
-        setPopupImage(imageSrc);
+        setSegmentImageSrc(imageSrc);
+        setShowSegmentPopup(true);
+    };
+
+    const handleRegenerate = async (originalImage: string, maskImage: string, prompt: string) => {
+        try {
+            // Call your image generation API
+            const response = await fetch('/api/regenerate-panel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    originalImage,
+                    maskImage,
+                    prompt,
+                    panelIndex: selectedPanel,
+                }),
+            });
+
+            const data = await response.json();
+            
+            if (data.success) {
+                // Update the panel with the new image
+                // You'll need to implement this based on your state management
+                alert('Panel regenerated successfully!');
+                setShowSegmentPopup(false);
+            }
+        } catch (error) {
+            console.error('Error regenerating panel:', error);
+            alert('Failed to regenerate panel');
+        }
     };
 
     const closePopup = () => {
@@ -396,6 +810,14 @@ function FrameWithPanels() {
                         </button>
                     </Card>
                 </div>
+            )}
+
+            {showSegmentPopup && (
+                <SegmentationPopup
+                    imageSrc={segmentImageSrc}
+                    onClose={() => setShowSegmentPopup(false)}
+                    onRegenerate={handleRegenerate}
+                />
             )}
         </div>
     );
