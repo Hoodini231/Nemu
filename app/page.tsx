@@ -2,6 +2,7 @@ import Link from "next/link"
 import { Button } from "../components/ui/button"
 import { Card, CardContent } from "../components/ui/card"
 import { Pencil, Paperclip, Star } from "lucide-react"
+import MangaFeatureWidget from "../components/ui/bar";
 
 export default function LandingPage() {
   return (
@@ -36,7 +37,7 @@ export default function LandingPage() {
       </div>
 
       {/* Hero Section */}
-      <section className="container mx-auto px-4 py-20 md:py-32 relative z-10">
+      <section className="container mx-auto px-4 py-16 md:py-16 relative z-10">
         <div className="max-w-5xl mx-auto text-center space-y-8">
           <h1 className="text-5xl md:text-7xl lg:text-8xl font-black text-foreground leading-tight text-balance tracking-tight">
             Bring Your Manga
@@ -60,8 +61,9 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <MangaFeatureWidget />
       {/* Feature Cards */}
-      <section className="container mx-auto px-4 py-8 relative z-10">
+      <section className="container mx-auto px-4 py-16 relative z-10">
         <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
           {/* Card 1 */}
           <Card className="bg-white/95 backdrop-blur-sm border-4 border-foreground shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1 relative overflow-hidden">
@@ -141,17 +143,8 @@ export default function LandingPage() {
       <footer className="border-t-4 border-foreground mt-16 bg-white/80 backdrop-blur-sm relative z-10">
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-sm text-foreground/70 font-medium">© 2025 MangaBoard. Crafted with creativity.</p>
+            <p className="text-sm text-foreground/70 font-medium">© 2025 Nemu. Crafted with love.</p>
             <div className="flex gap-6">
-              <Link href="#" className="text-sm text-foreground/70 hover:text-foreground transition-colors font-medium">
-                Privacy
-              </Link>
-              <Link href="#" className="text-sm text-foreground/70 hover:text-foreground transition-colors font-medium">
-                Terms
-              </Link>
-              <Link href="#" className="text-sm text-foreground/70 hover:text-foreground transition-colors font-medium">
-                Contact
-              </Link>
             </div>
           </div>
         </div>

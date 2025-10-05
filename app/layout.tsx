@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nemu",
+  title: "Nemu.ai",
   description: "AI-Powered Manga Storyboard Generator",
 };
 
